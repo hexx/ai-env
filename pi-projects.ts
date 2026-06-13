@@ -39,13 +39,16 @@ const generatePiResumeFunc = (
   const cases = Object.entries(piProjects)
     .map(
       ([project, sessionId]) =>
-        `    ${project}) pi --resume ${sessionId} ;;`,
+        `    ${project}) pi --session ${sessionId} ;;`,
     )
     .join("\n");
   const available = Object.keys(piProjects).join(" ");
   return [
     "pi-resume() {",
-    '  local project="$1"',
+    // 引数省略時はカレントディレクトリ名をプロジェクト名として自動採用。
+    // 通常文字列内に bash の ${1:-...} を含むため oxlint ルールを部分抑止。
+    // oxlint-disable-next-line no-template-curly-in-string
+    '  local project="${1:-$(basename "$PWD")}"',
     '  case "$project" in',
     cases,
     '    *) echo "Unknown project: $project" >&2',
