@@ -1,5 +1,6 @@
 #!/usr/bin/env -S npx tsx
 
+import { buildInitScript, loadPiProjects } from "./pi-projects";
 import { execFileSync, spawnSync } from "node:child_process";
 import { Command } from "commander";
 import { platform } from "node:os";
@@ -10,10 +11,6 @@ const EXIT_ERROR = 1;
 const IMAGE_NAME = "pi-private-sandbox";
 const OCR_LLM_URL = "https://opencode.ai/zen/go/v1";
 const OCR_LLM_MODEL = "mimo-v2.5-pro";
-
-// コンテナ起動直後にコンテナ内で実行する初期化スクリプト。
-// socat で herdr.sock を TCP にブリッジしつつ、インタラクティブ bash を起動する。
-const INIT_SCRIPT = String.raw`cp -r /tmp/.ssh ~/.ssh && chown -R $(id -u):$(id -g) ~/.ssh && chmod 700 ~/.ssh && find ~/.ssh -type f -exec chmod 600 {} \; && mkdir -p ~/.config/herdr && socat UNIX-LISTEN:/home/pi/.config/herdr/herdr.sock,fork,reuseaddr TCP:host.docker.internal:9123 & exec /bin/bash`;
 
 // stderr にダンプする docker コマンドの --env=KEY=VALUE のうち、
 // KEY が _API_KEY / _TOKEN で終わるものの VALUE を *** に置き換えるための正規表現。
@@ -116,6 +113,7 @@ const buildVolumeArgs = (home: string): string[] => [
 const buildDockerArgs = (
   envArgs: string[],
   volumeArgs: string[],
+  initScript: string,
 ): string[] => [
   "run",
   "-it",
@@ -126,7 +124,7 @@ const buildDockerArgs = (
   "/bin/bash",
   IMAGE_NAME,
   "-c",
-  INIT_SCRIPT,
+  initScript,
 ];
 
 const loadCredentials = (): Credentials => {
@@ -163,27 +161,30 @@ const runDocker = (args: string[]): number => {
 
 const isMacOS = (): boolean => platform() === "darwin";
 
-const runDockerContainer = (
-  credentials: Credentials,
-  home: string,
-  herdrPaneId: string,
-): number => {
-  const envArgs = buildEnvArgs(herdrPaneId, credentials);
-  const volumeArgs = buildVolumeArgs(home);
-  const dockerArgs = buildDockerArgs(envArgs, volumeArgs);
+// runDockerContainer の引数をまとめて渡すための型。
+// パラメータ数を抑えつつ、コンテキストを明示的に扱えるようにする。
+interface RunContext {
+  credentials: Credentials;
+  herdrPaneId: string;
+  home: string;
+  piProjects: Record<string, string>;
+}
+
+const runDockerContainer = (ctx: RunContext): number => {
+  const envArgs = buildEnvArgs(ctx.herdrPaneId, ctx.credentials);
+  const volumeArgs = buildVolumeArgs(ctx.home);
+  const initScript = buildInitScript(ctx.piProjects);
+  const dockerArgs = buildDockerArgs(envArgs, volumeArgs, initScript);
   console.error(`$ docker ${redactSecrets(dockerArgs).join(" ")}`);
   return runDocker(dockerArgs);
 };
 
-const prepareEnvironment = (): {
-  credentials: Credentials;
-  herdrPaneId: string;
-  home: string;
-} => {
+const prepareEnvironment = (): RunContext => {
   const credentials = loadCredentials();
   const home = requireEnv("HOME");
   const herdrPaneId = requireEnv("HERDR_PANE_ID");
-  return { credentials, herdrPaneId, home };
+  const piProjects = loadPiProjects();
+  return { credentials, herdrPaneId, home, piProjects };
 };
 
 const handleError = (error: unknown): number => {
@@ -205,8 +206,7 @@ const main = (): number => {
       );
       return EXIT_ERROR;
     }
-    const { credentials, home, herdrPaneId } = prepareEnvironment();
-    return runDockerContainer(credentials, home, herdrPaneId);
+    return runDockerContainer(prepareEnvironment());
   } catch (error) {
     return handleError(error);
   }
