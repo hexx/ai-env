@@ -3,6 +3,7 @@
 import { buildInitScript, loadPiProjects } from "./pi-projects";
 import { execFileSync, spawnSync } from "node:child_process";
 import { Command } from "commander";
+import { basename } from "node:path";
 import { platform } from "node:os";
 
 // ===== 定数 =====
@@ -93,9 +94,11 @@ const requireEnv = (name: string): string => {
 
 const buildEnvArgs = (
   herdrPaneId: string,
+  hostProjectName: string,
   credentials: Credentials,
 ): string[] => [
   `--env=HERDR_PANE_ID=${herdrPaneId}`,
+  `--env=HOST_PROJECT_NAME=${hostProjectName}`,
   `--env=OCR_LLM_URL=${OCR_LLM_URL}`,
   `--env=OCR_LLM_TOKEN=${credentials.OPENCODE_API_KEY}`,
   `--env=OCR_LLM_MODEL=${OCR_LLM_MODEL}`,
@@ -167,11 +170,16 @@ interface RunContext {
   credentials: Credentials;
   herdrPaneId: string;
   home: string;
+  hostProjectName: string;
   piProjects: Record<string, string>;
 }
 
 const runDockerContainer = (ctx: RunContext): number => {
-  const envArgs = buildEnvArgs(ctx.herdrPaneId, ctx.credentials);
+  const envArgs = buildEnvArgs(
+    ctx.herdrPaneId,
+    ctx.hostProjectName,
+    ctx.credentials,
+  );
   const volumeArgs = buildVolumeArgs(ctx.home);
   const initScript = buildInitScript(ctx.piProjects);
   const dockerArgs = buildDockerArgs(envArgs, volumeArgs, initScript);
@@ -183,8 +191,12 @@ const prepareEnvironment = (): RunContext => {
   const credentials = loadCredentials();
   const home = requireEnv("HOME");
   const herdrPaneId = requireEnv("HERDR_PANE_ID");
+  // ホスト側のカレントディレクトリ名を取り、コンテナに環境変数として渡す。
+  // コンテナ内 $PWD は常に /workspace なので basename が 'workspace' 固定になり
+  // 自動認識が機能しないため、ホスト側で先に算出する。
+  const hostProjectName = basename(process.cwd());
   const piProjects = loadPiProjects();
-  return { credentials, herdrPaneId, home, piProjects };
+  return { credentials, herdrPaneId, home, hostProjectName, piProjects };
 };
 
 const handleError = (error: unknown): number => {

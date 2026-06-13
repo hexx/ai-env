@@ -45,10 +45,13 @@ const generatePiResumeFunc = (
   const available = Object.keys(piProjects).join(" ");
   return [
     "pi-resume() {",
-    // 引数省略時はカレントディレクトリ名をプロジェクト名として自動採用。
+    // 引数省略時は HOST_PROJECT_NAME 環境変数(= ホストの cwd ディレクトリ名)を
+    // プロジェクト名として自動採用。コンテナ内の $PWD は常に /workspace なので
+    // $(basename "$PWD") では 'workspace' 固定になり機能しないため、ホスト側で
+    // 算出した値を環境変数経由で受け取る。
     // 通常文字列内に bash の ${1:-...} を含むため oxlint ルールを部分抑止。
     // oxlint-disable-next-line no-template-curly-in-string
-    '  local project="${1:-$(basename "$PWD")}"',
+    '  local project="${1:-$HOST_PROJECT_NAME}"',
     '  case "$project" in',
     cases,
     '    *) echo "Unknown project: $project" >&2',
