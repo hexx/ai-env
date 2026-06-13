@@ -206,14 +206,7 @@ const main = (): number => {
       );
       return EXIT_ERROR;
     }
-    const { credentials, herdrPaneId, home, piProjects } =
-      prepareEnvironment();
-    return runDockerContainer({
-      credentials,
-      herdrPaneId,
-      home,
-      piProjects,
-    });
+    return runDockerContainer(prepareEnvironment());
   } catch (error) {
     return handleError(error);
   }

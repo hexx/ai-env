@@ -6,7 +6,8 @@
   },
   "rules": {
     "no-console": "off",
-    "capitalized-comments": "off"
+    "capitalized-comments": "off",
+    "import-style": "off"
   },
   "env": {
     "builtin": true

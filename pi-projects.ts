@@ -2,9 +2,9 @@
 // pi セッション再開用の設定(JSON)を読み込み、コンテナ用 pi-resume シェル関数と
 // 初期化スクリプトを生成する責務を集約したモジュール。
 
-import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import path from "node:path";
+import { join } from "node:path";
+import { readFileSync } from "node:fs";
 
 // unknown 型のエラーから人間可読なメッセージを取り出すヘルパ。
 // no-ternary ルール下で三元演算子を避けるため関数化。
@@ -19,13 +19,16 @@ const errorMessage = (error: unknown): string => {
 const MIN_PROJECTS = 1;
 // セッション ID 文字列の最小長(空文字は不可)。
 const MIN_VALUE_LENGTH = 1;
+// プロジェクト名 / セッション ID に許可する文字セット(シェルメタ文字を排除し
+// bash case 文への安全な埋め込みを保証)。
+const SAFE_ID_PATTERN = /^[a-zA-Z0-9_-]+$/u;
 
 // pi セッション再開設定(JSON)のファイルパスを返す。
 // 環境変数 AI_ENV_PI_PROJECTS で上書き可能(テストやカスタム配置用)。
 // 関数化しているのは、テスト時に env を切り替えられるよう評価を実行時に行うため。
 const getPiProjectsConfigPath = (): string =>
   process.env.AI_ENV_PI_PROJECTS ??
-  path.join(homedir(), ".config", "ai-env", "pi-projects.json");
+  join(homedir(), ".config", "ai-env", "pi-projects.json");
 
 // piProjects(Record<string, string>) からコンテナ用 pi-resume シェル関数を生成。
 // bash の case 文でプロジェクト名をディスパッチし、未知のプロジェクトは
@@ -72,20 +75,30 @@ ${piResumeFunc}
 exec /bin/bash`;
 };
 
-// 設定ファイルの存在チェックと読み込み。見つからなければエラー。
+// 設定ファイルの読み込み。ENOENT は「ファイル不在」として扱い、その他は
+// そのまま再 throw(TOCTOU 回避のため existsSync チェックは行わない)。
 const readConfigContent = (configPath: string): string => {
-  if (!existsSync(configPath)) {
-    throw new Error(
-      `設定ファイル ${configPath} が見つかりません。\n` +
-        `以下の形式で JSON ファイルを作成し、pi セッション ID を登録してください:\n` +
-        `{\n` +
-        `  "<project-name>": "<session-uuid>",\n` +
-        `  ...\n` +
-        `}\n` +
-        `リポジトリの pi-projects.example.json を参考にしてください。`,
-    );
+  try {
+    return readFileSync(configPath, "utf8");
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ENOENT"
+    ) {
+      throw new Error(
+        `設定ファイル ${configPath} が見つかりません。\n` +
+          `以下の形式で JSON ファイルを作成し、pi セッション ID を登録してください:\n` +
+          `{\n` +
+          `  "<project-name>": "<session-uuid>",\n` +
+          `  ...\n` +
+          `}\n` +
+          `リポジトリの pi-projects.example.json を参考にしてください。`,
+        { cause: error },
+      );
+    }
+    throw error;
   }
-  return readFileSync(configPath, "utf8");
 };
 
 // JSON パースを実行。失敗時はファイル名と原因を含めて再 throw。
@@ -100,11 +113,12 @@ const parseConfigJson = (configPath: string, content: string): unknown => {
   }
 };
 
-// パース済みの unknown 値を Record<string, string> に変換・検証。
-const extractProjects = (
+// パース済みの unknown 値を Record<string, unknown> に変換。
+// 期待型でない場合はエラー。呼び出し側では narrowed type として使える。
+const toProjectsObject = (
   configPath: string,
   parsed: unknown,
-): Record<string, string> => {
+): Record<string, unknown> => {
   if (
     typeof parsed !== "object" ||
     parsed === null ||
@@ -114,14 +128,44 @@ const extractProjects = (
       `設定ファイル ${configPath} の形式が不正です。プロジェクト名→UUID のオブジェクトが必要です。`,
     );
   }
+  return parsed as Record<string, unknown>;
+};
+
+// 単一の (key, value) エントリを検証して結果に追加。
+const validateAndCollect = (entry: {
+  configPath: string;
+  key: string;
+  result: Record<string, string>;
+  value: unknown;
+}): void => {
+  if (!SAFE_ID_PATTERN.test(entry.key)) {
+    throw new Error(
+      `設定ファイル ${entry.configPath} のキーが無効です: "${entry.key}" (英数字・ハイフン・アンダースコアのみ許可)`,
+    );
+  }
+  const { value } = entry;
+  if (typeof value !== "string" || value.length < MIN_VALUE_LENGTH) {
+    throw new Error(
+      `設定ファイル ${entry.configPath} の値が無効です: ${entry.key} = ${JSON.stringify(value)} (非空文字列が必要)`,
+    );
+  }
+  if (!SAFE_ID_PATTERN.test(value)) {
+    throw new Error(
+      `設定ファイル ${entry.configPath} の値が無効です: ${entry.key} = ${JSON.stringify(value)} (英数字・ハイフン・アンダースコアのみ許可)`,
+    );
+  }
+  entry.result[entry.key] = value;
+};
+
+// パース済みの unknown 値を Record<string, string> に変換・検証。
+const extractProjects = (
+  configPath: string,
+  parsed: unknown,
+): Record<string, string> => {
+  const obj = toProjectsObject(configPath, parsed);
   const result: Record<string, string> = {};
-  for (const [key, value] of Object.entries(parsed)) {
-    if (typeof value !== "string" || value.length < MIN_VALUE_LENGTH) {
-      throw new Error(
-        `設定ファイル ${configPath} の値が無効です: ${key} = ${JSON.stringify(value)} (非空文字列が必要)`,
-      );
-    }
-    result[key] = value;
+  for (const [key, value] of Object.entries(obj)) {
+    validateAndCollect({ configPath, key, result, value });
   }
   if (Object.keys(result).length < MIN_PROJECTS) {
     throw new Error(
