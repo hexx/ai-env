@@ -69,11 +69,9 @@ find ~/.ssh -type f -exec chmod 600 {} \; && \
 mkdir -p ~/.config/herdr && \
 socat UNIX-LISTEN:/home/pi/.config/herdr/herdr.sock,fork,reuseaddr TCP:host.docker.internal:9123 &
 
-# pi セッション再開用コマンドを .bashrc に追記
-# (直接定義すると exec /bin/bash で消えるため、次のシェルに引き継ぐ)
-cat << 'EOF' >> ~/.bashrc
+cat << 'PI_RESUME_EOF' >> /home/pi/.bashrc
 ${piResumeFunc}
-EOF
+PI_RESUME_EOF
 
 exec /bin/bash`;
 };
