@@ -105,22 +105,25 @@ program
     }
 
     // 3. 環境変数のマッピング
+    // spawnSync は引数配列の各要素をスペース分割せず 1 つの argv として渡すため、
+    // `-e KEY=VALUE`(スペース区切り)ではなく `--env=KEY=VALUE` 形式で渡す。
     const envArgs: string[] = [
-      `-e HERDR_PANE_ID=${herdrPaneId}`,
-      `-e OCR_LLM_URL=${OCR_LLM_URL}`,
-      `-e OCR_LLM_TOKEN=${OPENCODE_API_KEY}`,
-      `-e OCR_LLM_MODEL=${OCR_LLM_MODEL}`,
-      `-e XIAOMI_TOKEN_PLAN_SGP_API_KEY=${XIAOMI_TOKEN_PLAN_SGP_API_KEY}`,
-      `-e OPENROUTER_API_KEY=${OPENROUTER_API_KEY}`,
-      `-e GH_TOKEN=${GH_TOKEN}`,
+      `--env=HERDR_PANE_ID=${herdrPaneId}`,
+      `--env=OCR_LLM_URL=${OCR_LLM_URL}`,
+      `--env=OCR_LLM_TOKEN=${OPENCODE_API_KEY}`,
+      `--env=OCR_LLM_MODEL=${OCR_LLM_MODEL}`,
+      `--env=XIAOMI_TOKEN_PLAN_SGP_API_KEY=${XIAOMI_TOKEN_PLAN_SGP_API_KEY}`,
+      `--env=OPENROUTER_API_KEY=${OPENROUTER_API_KEY}`,
+      `--env=GH_TOKEN=${GH_TOKEN}`,
     ];
 
     // 4. ボリュームマウント
+    // 同様に `-v src:dst` ではなく `--volume=src:dst` 形式で渡す。
     const cwd = process.cwd();
     const volumeArgs: string[] = [
-      `-v ${cwd}:/workspace`,
-      `-v ${home}/.ssh:/tmp/.ssh:ro`,
-      `-v ${home}/.pi:/home/pi/.pi`,
+      `--volume=${cwd}:/workspace`,
+      `--volume=${home}/.ssh:/tmp/.ssh:ro`,
+      `--volume=${home}/.pi:/home/pi/.pi`,
     ];
 
     // 5. コンテナ起動と初期化スクリプト
@@ -142,10 +145,12 @@ program
     ];
 
     // 確認用にコマンドを stderr に出力(シークレットはマスク)
+    // --env=KEY=VALUE 形式のうち、KEY が _API_KEY / _TOKEN で終わるものの VALUE をマスク
     const redactedArgs = dockerArgs.map((a) =>
-      /-e\s+\w+(_API_KEY|_TOKEN)=.+/i.test(a)
-        ? a.replace(/(=)(.+)/, "$1***")
-        : a,
+      a.replace(
+        /^--env=([A-Z0-9_]+(_API_KEY|_TOKEN))=.*$/,
+        "--env=$1=***",
+      ),
     );
     console.error(`$ docker ${redactedArgs.join(" ")}`);
 
