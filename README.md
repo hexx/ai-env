@@ -41,3 +41,19 @@ ai-env
 | `OPENCODE_API_KEY` | macOS Keychain |
 | `OPENROUTER_API_KEY` | macOS Keychain |
 | `GH_TOKEN` | `gh auth token` |
+
+## pi セッション再開設定
+
+コンテナ内で `pi-resume <project>` を使うと、事前定義したプロジェクトのセッションを再開できる。
+
+設定は `~/.config/ai-env/pi-projects.json` に JSON ファイルとして配置する。
+リポジトリの [`pi-projects.example.json`](./pi-projects.example.json) を参考に作成すること:
+
+```json
+{
+  "<project-name>": "<session-uuid>",
+  "mindmap": "019e9b9f-e299-7b7f-a1c1-cc6c5753efc4"
+}
+```
+
+設定ファイルパスは環境変数 `AI_ENV_PI_PROJECTS` で上書き可能。

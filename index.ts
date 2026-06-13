@@ -1,5 +1,6 @@
 #!/usr/bin/env -S npx tsx
 
+import { buildInitScript, loadPiProjects } from "./pi-projects";
 import { execFileSync, spawnSync } from "node:child_process";
 import { Command } from "commander";
 import { platform } from "node:os";
@@ -10,59 +11,6 @@ const EXIT_ERROR = 1;
 const IMAGE_NAME = "pi-private-sandbox";
 const OCR_LLM_URL = "https://opencode.ai/zen/go/v1";
 const OCR_LLM_MODEL = "mimo-v2.5-pro";
-
-// pi セッション再開用のプロジェクト名 → セッションID マッピング。
-// コンテナ内で `pi-resume <project>` として使う。
-const PI_PROJECTS: Record<string, string> = {
-  "ai-env": "019ec00f-6774-7719-9d32-0ce0acf7892f",
-  "ignite-timer": "019e950d-d3e4-7f42-ace9-e966f8ad9f27",
-  "mindmap": "019e9b9f-e299-7b7f-a1c1-cc6c5753efc4",
-  "misskey-pwa": "019e96ce-b2dc-7716-bab8-e53e74f1b0fd",
-  "org-toolkit": "019ea73e-d499-7337-a4d8-d12d8be06c1a",
-  "rss-reader": "019e99bb-c065-77cf-a458-a38ce1c0ef9e",
-  "skills": "019ea74c-38d6-7700-89b8-c24f47f19e9e",
-  "task-manager": "019ea76f-92d3-7442-a675-b79162e7f1c7",
-};
-
-// PI_PROJECTS からコンテナ用 pi-resume シェル関数を生成。
-// bash の case 文でプロジェクト名をディスパッチし、未知のプロジェクトは
-// 利用可能プロジェクト一覧とともにエラー終了する。
-const generatePiResumeFunc = (): string => {
-  const cases = Object.entries(PI_PROJECTS)
-    .map(
-      ([project, sessionId]) =>
-        `    ${project}) pi --resume ${sessionId} ;;`,
-    )
-    .join("\n");
-  const available = Object.keys(PI_PROJECTS).join(" ");
-  return [
-    "pi-resume() {",
-    '  local project="$1"',
-    '  case "$project" in',
-    cases,
-    '    *) echo "Unknown project: $project" >&2',
-    `       echo "Available: ${available}" >&2`,
-    "       return 1 ;;",
-    "  esac",
-    "}",
-  ].join("\n");
-};
-
-const PI_RESUME_FUNC = generatePiResumeFunc();
-
-// コンテナ起動直後にコンテナ内で実行する初期化スクリプト。
-// SSH 鍵のセットアップ → socat ブリッジ → pi-resume 関数定義 → bash 起動の順に実行。
-const INIT_SCRIPT = String.raw`cp -r /tmp/.ssh ~/.ssh && \
-chown -R $(id -u):$(id -g) ~/.ssh && \
-chmod 700 ~/.ssh && \
-find ~/.ssh -type f -exec chmod 600 {} \; && \
-mkdir -p ~/.config/herdr && \
-socat UNIX-LISTEN:/home/pi/.config/herdr/herdr.sock,fork,reuseaddr TCP:host.docker.internal:9123 &
-
-# pi セッション再開用コマンド(PI_PROJECTS から自動生成)
-${PI_RESUME_FUNC}
-
-exec /bin/bash`;
 
 // stderr にダンプする docker コマンドの --env=KEY=VALUE のうち、
 // KEY が _API_KEY / _TOKEN で終わるものの VALUE を *** に置き換えるための正規表現。
@@ -165,6 +113,7 @@ const buildVolumeArgs = (home: string): string[] => [
 const buildDockerArgs = (
   envArgs: string[],
   volumeArgs: string[],
+  initScript: string,
 ): string[] => [
   "run",
   "-it",
@@ -175,7 +124,7 @@ const buildDockerArgs = (
   "/bin/bash",
   IMAGE_NAME,
   "-c",
-  INIT_SCRIPT,
+  initScript,
 ];
 
 const loadCredentials = (): Credentials => {
@@ -212,27 +161,30 @@ const runDocker = (args: string[]): number => {
 
 const isMacOS = (): boolean => platform() === "darwin";
 
-const runDockerContainer = (
-  credentials: Credentials,
-  home: string,
-  herdrPaneId: string,
-): number => {
-  const envArgs = buildEnvArgs(herdrPaneId, credentials);
-  const volumeArgs = buildVolumeArgs(home);
-  const dockerArgs = buildDockerArgs(envArgs, volumeArgs);
+// runDockerContainer の引数をまとめて渡すための型。
+// パラメータ数を抑えつつ、コンテキストを明示的に扱えるようにする。
+interface RunContext {
+  credentials: Credentials;
+  herdrPaneId: string;
+  home: string;
+  piProjects: Record<string, string>;
+}
+
+const runDockerContainer = (ctx: RunContext): number => {
+  const envArgs = buildEnvArgs(ctx.herdrPaneId, ctx.credentials);
+  const volumeArgs = buildVolumeArgs(ctx.home);
+  const initScript = buildInitScript(ctx.piProjects);
+  const dockerArgs = buildDockerArgs(envArgs, volumeArgs, initScript);
   console.error(`$ docker ${redactSecrets(dockerArgs).join(" ")}`);
   return runDocker(dockerArgs);
 };
 
-const prepareEnvironment = (): {
-  credentials: Credentials;
-  herdrPaneId: string;
-  home: string;
-} => {
+const prepareEnvironment = (): RunContext => {
   const credentials = loadCredentials();
   const home = requireEnv("HOME");
   const herdrPaneId = requireEnv("HERDR_PANE_ID");
-  return { credentials, herdrPaneId, home };
+  const piProjects = loadPiProjects();
+  return { credentials, herdrPaneId, home, piProjects };
 };
 
 const handleError = (error: unknown): number => {
@@ -254,8 +206,14 @@ const main = (): number => {
       );
       return EXIT_ERROR;
     }
-    const { credentials, home, herdrPaneId } = prepareEnvironment();
-    return runDockerContainer(credentials, home, herdrPaneId);
+    const { credentials, herdrPaneId, home, piProjects } =
+      prepareEnvironment();
+    return runDockerContainer({
+      credentials,
+      herdrPaneId,
+      home,
+      piProjects,
+    });
   } catch (error) {
     return handleError(error);
   }
