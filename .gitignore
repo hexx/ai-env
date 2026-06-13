@@ -34,3 +34,6 @@ coverage/
 # Misc
 .cache/
 .tmp/
+
+# Local task input (do not commit)
+issues/

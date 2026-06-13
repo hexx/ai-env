@@ -1,0 +1,24 @@
+{
+  "name": "ai-env",
+  "version": "0.1.0",
+  "description": "私専用のAI開発用Dockerサンドボックス環境を簡単に起動するCLI",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "ai-env": "./index.ts"
+  },
+  "scripts": {
+    "start": "tsx index.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "commander": "^14.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.7.0"
+  }
+}
