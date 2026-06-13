@@ -28,13 +28,6 @@ interface CredentialSource {
   name: string;
 }
 
-interface Credentials {
-  GH_TOKEN: string;
-  OPENCODE_API_KEY: string;
-  OPENROUTER_API_KEY: string;
-  XIAOMI_TOKEN_PLAN_SGP_API_KEY: string;
-}
-
 // ===== クレデンシャル定義 =====
 // 配列のキーは sort-keys ルールに合わせて args, file, name のアルファベット順。
 
@@ -66,6 +59,14 @@ const CREDENTIAL_SOURCES: CredentialSource[] = [
   },
 ];
 
+// Credentials 型を CREDENTIAL_SOURCES から導出。
+// CREDENTIAL_SOURCES に新エントリを追加すれば型も自動拡張されるため、
+// interface と配列の不整合による型漏れを構造的に防止できる。
+type Credentials = Record<
+  (typeof CREDENTIAL_SOURCES)[number]["name"],
+  string
+>;
+
 // ===== ヘルパー関数 =====
 
 /**
@@ -88,8 +89,7 @@ const getCredential = (file: string, args: string[]): string => {
 const requireEnv = (name: string): string => {
   const value = process.env[name];
   if (!value) {
-    console.error(`環境変数 ${name} が未設定です。`);
-    process.exit(EXIT_ERROR);
+    throw new Error(`環境変数 ${name} が未設定です。`);
   }
   return value;
 };
@@ -130,18 +130,17 @@ const buildDockerArgs = (
 ];
 
 const loadCredentials = (): Credentials => {
-  const credentials = {} as Credentials;
+  const credentials = {} as Record<string, string>;
   for (const { name, file, args } of CREDENTIAL_SOURCES) {
     const value = getCredential(file, args);
     if (!value) {
-      console.error(
+      throw new Error(
         `クレデンシャル '${name}' の取得に失敗しました。macOS Keychain の登録状態 / 'gh auth login' の完了を確認してください。`,
       );
-      process.exit(EXIT_ERROR);
     }
-    credentials[name as keyof Credentials] = value;
+    credentials[name] = value;
   }
-  return credentials;
+  return credentials as Credentials;
 };
 
 const redactSecrets = (args: string[]): string[] =>
@@ -153,18 +152,16 @@ const runDocker = (args: string[]): number => {
     console.error("dockerの実行に失敗しました:", result.error.message);
     return EXIT_ERROR;
   }
+  if (result.signal) {
+    // 子プロセスがシグナルで終了した場合、status は null になる。
+    // 原因をユーザーに伝えるため、シグナル名を stderr に出力する。
+    console.error(`dockerがシグナル ${result.signal} で終了しました。`);
+    return EXIT_ERROR;
+  }
   return result.status ?? EXIT_ERROR;
 };
 
-const isMacOS = (): boolean => {
-  if (platform() === "darwin") {
-    return true;
-  }
-  console.error(
-    "ai-env は macOS 専用です(macOS Keychain 'security' コマンド / 'host.docker.internal' を前提にしています)。",
-  );
-  return false;
-};
+const isMacOS = (): boolean => platform() === "darwin";
 
 const runDockerContainer = (
   credentials: Credentials,
@@ -178,16 +175,41 @@ const runDockerContainer = (
   return runDocker(dockerArgs);
 };
 
-// ===== メイン処理 =====
-
-const main = (): number => {
-  if (!isMacOS()) {
-    return EXIT_ERROR;
-  }
+const prepareEnvironment = (): {
+  credentials: Credentials;
+  herdrPaneId: string;
+  home: string;
+} => {
   const credentials = loadCredentials();
   const home = requireEnv("HOME");
   const herdrPaneId = requireEnv("HERDR_PANE_ID");
-  return runDockerContainer(credentials, home, herdrPaneId);
+  return { credentials, herdrPaneId, home };
+};
+
+const handleError = (error: unknown): number => {
+  if (error instanceof Error) {
+    console.error(error.message);
+    return EXIT_ERROR;
+  }
+  console.error("予期しないエラーが発生しました:", error);
+  return EXIT_ERROR;
+};
+
+// ===== メイン処理 =====
+
+const main = (): number => {
+  try {
+    if (!isMacOS()) {
+      console.error(
+        "ai-env は macOS 専用です(macOS Keychain 'security' コマンド / 'host.docker.internal' を前提にしています)。",
+      );
+      return EXIT_ERROR;
+    }
+    const { credentials, home, herdrPaneId } = prepareEnvironment();
+    return runDockerContainer(credentials, home, herdrPaneId);
+  } catch (error) {
+    return handleError(error);
+  }
 };
 
 // ===== CLI エントリポイント =====
