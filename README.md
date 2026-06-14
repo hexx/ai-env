@@ -51,9 +51,16 @@ ai-env
 
 ```json
 {
-  "<project-name>": "<session-uuid>",
+  "ai-env": {
+    "session": "019ec00f-6774-7719-9d32-0ce0acf7892f",
+    "provider": "opencode-go",
+    "model": "minimax-m3"
+  },
   "mindmap": "019e9b9f-e299-7b7f-a1c1-cc6c5753efc4"
 }
 ```
+
+値は文字列(セッション ID のみ)とオブジェクト(`session` 必須、`provider` / `model` 任意)の両方を受け付ける。
+オブジェクト形式の場合、`pi-resume` 実行時は `--provider <p> --model <m> --thinking high --session <s>` の順で組み立てる。`--thinking high` は常に付与される。
 
 設定ファイルパスは環境変数 `AI_ENV_PI_PROJECTS` で上書き可能。

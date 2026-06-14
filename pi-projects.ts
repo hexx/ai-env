@@ -6,6 +6,19 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
 
+// ===== 型定義 =====
+
+// 設定ファイル 1 プロジェクトぶんの設定。
+// 後方互換のため、value がオブジェクトではなく「セッション ID 文字列」の
+// 形式でも受け付ける(parseProjectValue で正規化)。
+export interface ProjectConfig {
+  session: string;
+  provider?: string;
+  model?: string;
+}
+
+// ===== 定数 =====
+
 // unknown 型のエラーから人間可読なメッセージを取り出すヘルパ。
 // no-ternary ルール下で三元演算子を避けるため関数化。
 const errorMessage = (error: unknown): string => {
@@ -17,30 +30,46 @@ const errorMessage = (error: unknown): string => {
 
 // pi セッション ID として登録可能なプロジェクト数の下限(0 件は不可)。
 const MIN_PROJECTS = 1;
-// セッション ID 文字列の最小長(空文字は不可)。
-const MIN_VALUE_LENGTH = 1;
-// プロジェクト名 / セッション ID に許可する文字セット(シェルメタ文字を排除し
-// bash case 文への安全な埋め込みを保証)。
+// プロジェクト名 / セッション ID / provider / model に許可する文字セット
+// (シェルメタ文字を排除し bash case 文への安全な埋め込みを保証)。
 const SAFE_ID_PATTERN = /^[a-zA-Z0-9_-]+$/u;
 
-// pi セッション再開設定(JSON)のファイルパスを返す。
+// pi セッション再開設定(JSON)のファイルパス。
 // 環境変数 AI_ENV_PI_PROJECTS で上書き可能(テストやカスタム配置用)。
 // 関数化しているのは、テスト時に env を切り替えられるよう評価を実行時に行うため。
 const getPiProjectsConfigPath = (): string =>
   process.env.AI_ENV_PI_PROJECTS ??
   join(homedir(), ".config", "ai-env", "pi-projects.json");
 
-// piProjects(Record<string, string>) からコンテナ用 pi-resume シェル関数を生成。
-// bash の case 文でプロジェクト名をディスパッチし、未知のプロジェクトは
-// 利用可能プロジェクト一覧とともにエラー終了する。
+// ===== 関数生成 =====
+
+// 任意の値から '--name <value>' フラグ文字列を生成(空文字なら空文字)。
+// 値部分をダブルクォートで囲み、先頭が '-' の値(例: '-h')が CLI パーサーに
+// フラグとして誤解釈されるリスクを排除する。
+// no-ternary ルール下で三元演算子を避けるため関数化。
+const buildOptionalFlag = (name: string, value: string | undefined): string => {
+  if (value) {
+    return `--${name}="${value}"`;
+  }
+  return "";
+};
+
+// piProjects(Record<string, ProjectConfig>) からコンテナ用 pi-resume シェル関数を生成。
+// 各 case では '--provider <p> --model <m> --thinking high --session <s>' の順で組み立てる。
+// provider / model は存在する場合のみ付与。
 const generatePiResumeFunc = (
-  piProjects: Record<string, string>,
+  piProjects: Record<string, ProjectConfig>,
 ): string => {
   const cases = Object.entries(piProjects)
-    .map(
-      ([project, sessionId]) =>
-        `    ${project}) pi --session ${sessionId} ;;`,
-    )
+    .map(([project, config]) => {
+      const flags = [
+        buildOptionalFlag("provider", config.provider),
+        buildOptionalFlag("model", config.model),
+        "--thinking high",
+        `--session="${config.session}"`,
+      ].join(" ");
+      return `    ${project}) pi ${flags} ;;`;
+    })
     .join("\n");
   const available = Object.keys(piProjects).join(" ");
   return [
@@ -65,7 +94,7 @@ const generatePiResumeFunc = (
 // コンテナ起動直後にコンテナ内で実行する初期化スクリプトを生成。
 // SSH 鍵セットアップ → socat ブリッジ → pi-resume 関数定義 → bash 起動の順。
 export const buildInitScript = (
-  piProjects: Record<string, string>,
+  piProjects: Record<string, ProjectConfig>,
 ): string => {
   const piResumeFunc = generatePiResumeFunc(piProjects);
   return String.raw`cp -r /tmp/.ssh ~/.ssh && \
@@ -81,6 +110,8 @@ PI_RESUME_EOF
 
 exec /bin/bash`;
 };
+
+// ===== 設定読み込み =====
 
 // 設定ファイルの読み込み。ENOENT は「ファイル不在」として扱い、その他は
 // そのまま再 throw(TOCTOU 回避のため existsSync チェックは行わない)。
@@ -98,6 +129,7 @@ const readConfigContent = (configPath: string): string => {
           `以下の形式で JSON ファイルを作成し、pi セッション ID を登録してください:\n` +
           `{\n` +
           `  "<project-name>": "<session-uuid>",\n` +
+          `  "<project-name>": { "session": "<uuid>", "provider": "<p>", "model": "<m>" },\n` +
           `  ...\n` +
           `}\n` +
           `リポジトリの pi-projects.example.json を参考にしてください。`,
@@ -132,17 +164,99 @@ const toProjectsObject = (
     Array.isArray(parsed)
   ) {
     throw new Error(
-      `設定ファイル ${configPath} の形式が不正です。プロジェクト名→UUID のオブジェクトが必要です。`,
+      `設定ファイル ${configPath} の形式が不正です。プロジェクト名→設定のオブジェクトが必要です。`,
     );
   }
   return parsed as Record<string, unknown>;
+};
+
+// 非空文字列を要求し、SAFE_ID_PATTERN を満たすことを検証。
+// 違反時は Error を投げる。合格時は値をそのまま返す。
+// 4 つのパラメータをオブジェクト引数パターンにまとめて max-params を回避。
+const requireSafeId = (params: {
+  configPath: string;
+  fieldName: string;
+  key: string;
+  rawValue: unknown;
+}): string => {
+  const { configPath, fieldName, key, rawValue } = params;
+  if (typeof rawValue !== "string" || rawValue === "") {
+    throw new Error(
+      `設定ファイル ${configPath} の値が無効です: ${key}.${fieldName} は非空文字列である必要があります`,
+    );
+  }
+  if (!SAFE_ID_PATTERN.test(rawValue)) {
+    throw new Error(
+      `設定ファイル ${configPath} の値が無効です: ${key}.${fieldName} = ${JSON.stringify(rawValue)} (英数字・ハイフン・アンダースコアのみ許可)`,
+    );
+  }
+  return rawValue;
+};
+
+// 単一の value を ProjectConfig に正規化。
+// - 文字列: { session: value } として扱う(後方互換)
+// - オブジェクト: session / provider? / model? を検証して抽出
+// - それ以外: エラー
+const parseProjectObject = (
+  configPath: string,
+  key: string,
+  obj: Record<string, unknown>,
+): ProjectConfig => {
+  const config: ProjectConfig = {
+    session: requireSafeId({
+      configPath,
+      fieldName: "session",
+      key,
+      rawValue: obj.session,
+    }),
+  };
+  if ("provider" in obj) {
+    config.provider = requireSafeId({
+      configPath,
+      fieldName: "provider",
+      key,
+      rawValue: obj.provider,
+    });
+  }
+  if ("model" in obj) {
+    config.model = requireSafeId({
+      configPath,
+      fieldName: "model",
+      key,
+      rawValue: obj.model,
+    });
+  }
+  return config;
+};
+
+const parseProjectValue = (
+  configPath: string,
+  key: string,
+  value: unknown,
+): ProjectConfig => {
+  if (typeof value === "string") {
+    return {
+      session: requireSafeId({
+        configPath,
+        fieldName: "session",
+        key,
+        rawValue: value,
+      }),
+    };
+  }
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return parseProjectObject(configPath, key, value as Record<string, unknown>);
+  }
+  throw new Error(
+    `設定ファイル ${configPath} の値が無効です: ${key} = ${JSON.stringify(value)} (文字列または { session, provider?, model? } オブジェクトが必要)`,
+  );
 };
 
 // 単一の (key, value) エントリを検証して結果に追加。
 const validateAndCollect = (entry: {
   configPath: string;
   key: string;
-  result: Record<string, string>;
+  result: Record<string, ProjectConfig>;
   value: unknown;
 }): void => {
   if (!SAFE_ID_PATTERN.test(entry.key)) {
@@ -150,27 +264,20 @@ const validateAndCollect = (entry: {
       `設定ファイル ${entry.configPath} のキーが無効です: "${entry.key}" (英数字・ハイフン・アンダースコアのみ許可)`,
     );
   }
-  const { value } = entry;
-  if (typeof value !== "string" || value.length < MIN_VALUE_LENGTH) {
-    throw new Error(
-      `設定ファイル ${entry.configPath} の値が無効です: ${entry.key} = ${JSON.stringify(value)} (非空文字列が必要)`,
-    );
-  }
-  if (!SAFE_ID_PATTERN.test(value)) {
-    throw new Error(
-      `設定ファイル ${entry.configPath} の値が無効です: ${entry.key} = ${JSON.stringify(value)} (英数字・ハイフン・アンダースコアのみ許可)`,
-    );
-  }
-  entry.result[entry.key] = value;
+  entry.result[entry.key] = parseProjectValue(
+    entry.configPath,
+    entry.key,
+    entry.value,
+  );
 };
 
-// パース済みの unknown 値を Record<string, string> に変換・検証。
+// パース済みの unknown 値を Record<string, ProjectConfig> に変換・検証。
 const extractProjects = (
   configPath: string,
   parsed: unknown,
-): Record<string, string> => {
+): Record<string, ProjectConfig> => {
   const obj = toProjectsObject(configPath, parsed);
-  const result: Record<string, string> = {};
+  const result: Record<string, ProjectConfig> = {};
   for (const [key, value] of Object.entries(obj)) {
     validateAndCollect({ configPath, key, result, value });
   }
@@ -182,10 +289,10 @@ const extractProjects = (
   return result;
 };
 
-// 設定ファイルから pi プロジェクト → セッションID マッピングを読み込む。
+// 設定ファイルから pi プロジェクト → 設定(ProjectConfig)マッピングを読み込む。
 // ファイル不在・JSON 不正・構造不正はすべて例外を投げ、
 // main の try/catch で一貫してエラーメッセージ表示 + exit 1 する。
-export const loadPiProjects = (): Record<string, string> => {
-  const configPath = getPiProjectsConfigPath();
-  return extractProjects(configPath, parseConfigJson(configPath, readConfigContent(configPath)));
+export const loadPiProjects = (): Record<string, ProjectConfig> => {
+  const cp = getPiProjectsConfigPath();
+  return extractProjects(cp, parseConfigJson(cp, readConfigContent(cp)));
 };

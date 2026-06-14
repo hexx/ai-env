@@ -1,6 +1,6 @@
 #!/usr/bin/env -S npx tsx
 
-import { buildInitScript, loadPiProjects } from "./pi-projects";
+import { type ProjectConfig, buildInitScript, loadPiProjects } from "./pi-projects";
 import { execFileSync, spawnSync } from "node:child_process";
 import { Command } from "commander";
 import { basename } from "node:path";
@@ -171,7 +171,7 @@ interface RunContext {
   herdrPaneId: string;
   home: string;
   hostProjectName: string;
-  piProjects: Record<string, string>;
+  piProjects: Record<string, ProjectConfig>;
 }
 
 const runDockerContainer = (ctx: RunContext): number => {
