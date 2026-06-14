@@ -51,11 +51,16 @@ const errorMessage = (error: unknown): string => {
 const MIN_PROJECTS = 1;
 // プロファイル数の下限(0 件は不可)。
 const MIN_PROFILES = 1;
-// プロジェクト名 / セッション ID / provider / model / OCR_LLM_URL に許可する文字セット
-// (シェルメタ文字を排除し bash case 文および docker --env 引数への
-// 安全な埋め込みを保証)。model 名や URL には '.' ':' '/' を含むものが
-// 一般的なためそれらも許容。
-const SAFE_ID_PATTERN = /^[a-zA-Z0-9._:/@?&=#%+-]+$/u;
+// プロジェクト名 / セッション ID / provider / model などの「シェルを経由する
+// 値」に使う文字セット。bash case パターン(?, *, [, ])やコマンド置換
+// ($, `)等のシェルメタ文字を排除。URL には使えない。
+const SAFE_SHELL_PATTERN = /^[a-zA-Z0-9._-]+$/u;
+
+// OCR_LLM_URL やより複雑な model 名など「docker --env=KEY=VALUE の値として
+// そのまま渡す」用途に許容する文字セット。spawnSync 経由なのでシェルを
+// 通さず、VALUE 内のスペース以外で分割されることはない。URL で必要になる
+// ':' '/' '@' '?' '&' '=' '#' '%' '+' を含むことができる。
+const SAFE_ENV_PATTERN = /^[a-zA-Z0-9._:/@?&=#%+-]+$/u;
 
 // pi セッション再開設定(JSON)のファイルパス。
 // 環境変数 AI_ENV_PI_PROJECTS で上書き可能(テストやカスタム配置用)。
@@ -67,8 +72,8 @@ const getAiEnvConfigPath = (): string =>
 // ===== 関数生成 =====
 
 // 任意の値から '--name <value>' フラグ文字列を生成(空文字なら空文字)。
-// 値は SAFE_ID_PATTERN で英数字・ハイフン・アンダースコアのみに制限済みなので
-// スペース区切り・非クォートで十分。シンプルに保たれる方を採用。
+// 値は SAFE_SHELL_PATTERN で英数字・ハイフン・アンダースコア・ピリオドのみに
+// 制限済みなのでスペース区切り・非クォートで十分。シンプルに保たれる方を採用。
 // no-ternary ルール下で三元演算子を避けるため関数化。
 const buildOptionalFlag = (name: string, value: string | undefined): string => {
   if (value) {
@@ -219,51 +224,80 @@ const toPlainObject = (
   return raw as Record<string, unknown>;
 };
 
-// 非空文字列を要求し、SAFE_ID_PATTERN を満たすことを検証。
+// 許可文字の人間可読説明(pattern → 説明文のマップ)。エラーメッセージで使用。
+// 参照等価で比較するため RegExp は同一インスタンスである必要があり、
+// モジュールレベルの SAFE_SHELL_PATTERN / SAFE_ENV_PATTERN 定数を使う。
+const PATTERN_DESCRIPTIONS = new Map<RegExp, string>([
+  [SAFE_SHELL_PATTERN, "英数字・ハイフン・アンダースコア・ピリオド"],
+  [SAFE_ENV_PATTERN, "英数字・ハイフン・アンダースコア・ピリオド・コロン・スラッシュ等(URL 用)"],
+]);;
+
+// 非空文字列を要求し、指定された pattern を満たすことを検証。
 // 違反時は Error を投げる。合格時は値をそのまま返す。
 // 4 つのパラメータをオブジェクト引数パターンにまとめて max-params を回避。
 const requireSafeId = (params: {
   configPath: string;
   fieldName: string;
   key: string;
+  pattern: RegExp;
   rawValue: unknown;
 }): string => {
-  const { configPath, fieldName, key, rawValue } = params;
+  const { configPath, fieldName, key, pattern, rawValue } = params;
   if (typeof rawValue !== "string" || rawValue === "") {
     throw new Error(
       `設定ファイル ${configPath} の値が無効です: ${key}.${fieldName} は非空文字列である必要があります`,
     );
   }
-  if (!SAFE_ID_PATTERN.test(rawValue)) {
+  if (!pattern.test(rawValue)) {
+    const allowed = PATTERN_DESCRIPTIONS.get(pattern) ?? "(unknown pattern)";
     throw new Error(
-      `設定ファイル ${configPath} の値が無効です: ${key}.${fieldName} = ${JSON.stringify(rawValue)} (英数字・ハイフン・アンダースコアのみ許可)`,
+      `設定ファイル ${configPath} の値が無効です: ${key}.${fieldName} = ${JSON.stringify(rawValue)} (許可文字: ${allowed})`,
     );
   }
   return rawValue;
 };
 
-// 単一プロファイルをパース・検証。4 つの必須文字列フィールドを SAFE_ID_PATTERN で検証。
+// 単一プロファイルをパース・検証。4 つの必須文字列フィールドを SAFE_ENV_PATTERN で検証。
 const parseProfileEntry = (
   configPath: string,
   name: string,
   raw: unknown,
 ): ProfileConfig => {
   const profileObj = toPlainObject(configPath, `profiles.${name}`, raw);
-  const fields = {
-    OCR_LLM_MODEL: profileObj.OCR_LLM_MODEL,
-    OCR_LLM_TOKEN_KEY: profileObj.OCR_LLM_TOKEN_KEY,
-    OCR_LLM_URL: profileObj.OCR_LLM_URL,
-    OCR_USE_ANTHROPIC: profileObj.OCR_USE_ANTHROPIC,
+  const OCR_LLM_MODEL = requireSafeId({
+    configPath,
+    fieldName: "OCR_LLM_MODEL",
+    key: `profiles.${name}`,
+    pattern: SAFE_ENV_PATTERN,
+    rawValue: profileObj.OCR_LLM_MODEL,
+  });
+  const OCR_LLM_TOKEN_KEY = requireSafeId({
+    configPath,
+    fieldName: "OCR_LLM_TOKEN_KEY",
+    key: `profiles.${name}`,
+    pattern: SAFE_ENV_PATTERN,
+    rawValue: profileObj.OCR_LLM_TOKEN_KEY,
+  });
+  const OCR_LLM_URL = requireSafeId({
+    configPath,
+    fieldName: "OCR_LLM_URL",
+    key: `profiles.${name}`,
+    pattern: SAFE_ENV_PATTERN,
+    rawValue: profileObj.OCR_LLM_URL,
+  });
+  const OCR_USE_ANTHROPIC = requireSafeId({
+    configPath,
+    fieldName: "OCR_USE_ANTHROPIC",
+    key: `profiles.${name}`,
+    pattern: SAFE_ENV_PATTERN,
+    rawValue: profileObj.OCR_USE_ANTHROPIC,
+  });
+  return {
+    OCR_LLM_MODEL,
+    OCR_LLM_TOKEN_KEY,
+    OCR_LLM_URL,
+    OCR_USE_ANTHROPIC,
   };
-  for (const field of Object.keys(fields)) {
-    requireSafeId({
-      configPath,
-      fieldName: field,
-      key: `profiles.${name}`,
-      rawValue: fields[field as keyof typeof fields],
-    });
-  }
-  return fields as ProfileConfig;
 };
 
 // profiles ブロックをパース・検証。Record<string, ProfileConfig> に変換。
@@ -284,9 +318,9 @@ const parseProfiles = (
 
 // プロジェクトキー名(英数字・ハイフン・アンダースコアのみ)を検証。
 const validateProjectKey = (configPath: string, key: string): void => {
-  if (!SAFE_ID_PATTERN.test(key)) {
+  if (!SAFE_SHELL_PATTERN.test(key)) {
     throw new Error(
-      `設定ファイル ${configPath} のキーが無効です: "${key}" (英数字・ハイフン・アンダースコアのみ許可)`,
+      `設定ファイル ${configPath} のキーが無効です: "${key}" (英数字・ハイフン・アンダースコア・ピリオドのみ許可)`,
     );
   }
 };
@@ -298,13 +332,13 @@ const parseProjectObjectValue = (
   obj: Record<string, unknown>,
 ): ProjectConfig => {
   const config: ProjectConfig = {
-    session: requireSafeId({ configPath, fieldName: "session", key, rawValue: obj.session }),
+    session: requireSafeId({ configPath, fieldName: "session", key, pattern: SAFE_SHELL_PATTERN, rawValue: obj.session }),
   };
   if ("provider" in obj) {
-    config.provider = requireSafeId({ configPath, fieldName: "provider", key, rawValue: obj.provider });
+    config.provider = requireSafeId({ configPath, fieldName: "provider", key, pattern: SAFE_SHELL_PATTERN, rawValue: obj.provider });
   }
   if ("model" in obj) {
-    config.model = requireSafeId({ configPath, fieldName: "model", key, rawValue: obj.model });
+    config.model = requireSafeId({ configPath, fieldName: "model", key, pattern: SAFE_SHELL_PATTERN, rawValue: obj.model });
   }
   return config;
 };
@@ -317,7 +351,7 @@ const parseProjectEntry = (
 ): ProjectConfig => {
   if (typeof value === "string") {
     return {
-      session: requireSafeId({ configPath, fieldName: "session", key, rawValue: value }),
+      session: requireSafeId({ configPath, fieldName: "session", key, pattern: SAFE_SHELL_PATTERN, rawValue: value }),
     };
   }
   if (typeof value === "object" && value !== null && !Array.isArray(value)) {

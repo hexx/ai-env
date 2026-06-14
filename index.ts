@@ -96,20 +96,22 @@ const requireEnv = (name: string): string => {
   return value;
 };
 
-// ホストの cwd に、いずれかのプロファイル名(例: "pi-private", "pi-work")が
-// 含まれているかを走査し、最初にマッチしたプロファイル名を返す。
+// ホストの cwd をパスセグメント('/' 区切り)に分割し、いずれかのプロファイル名
+// と完全一致するセグメントがあればそれを返す。サブストリング一致(例:
+// cwd='/home/user/framework' で profile='work' が誤検出)を防ぐ。
 // どちらも含まれない場合はエラー(プロファイル自動判別は曖昧さを許容しない)。
 const detectProfileName = (
   cwd: string,
   profiles: Record<string, ProfileConfig>,
 ): string => {
+  const segments = cwd.split("/");
   for (const name of Object.keys(profiles)) {
-    if (cwd.includes(name)) {
+    if (segments.includes(name)) {
       return name;
     }
   }
   throw new Error(
-    `カレントディレクトリ '${cwd}' にプロファイル(${Object.keys(profiles).join(", ")})のいずれもパスに含まれていません。プロファイル名のいずれかをパスに含めてください。`,
+    `カレントディレクトリ '${cwd}' のパスセグメントにプロファイル(${Object.keys(profiles).join(", ")})のいずれも見つかりません。プロファイル名のいずれかをパスセグメントとして含めてください。`,
   );
 };
 
