@@ -1,6 +1,12 @@
 #!/usr/bin/env -S npx tsx
 
-import { type ProjectConfig, buildInitScript, loadPiProjects } from "./pi-projects";
+import {
+  type AiEnvConfig,
+  type ProfileConfig,
+  type ProjectConfig,
+  buildInitScript,
+  loadAiEnvConfig,
+} from "./pi-projects";
 import { execFileSync, spawnSync } from "node:child_process";
 import { Command } from "commander";
 import { basename } from "node:path";
@@ -10,8 +16,6 @@ import { platform } from "node:os";
 
 const EXIT_ERROR = 1;
 const IMAGE_NAME = "pi-private-sandbox";
-const OCR_LLM_URL = "https://opencode.ai/zen/go/v1";
-const OCR_LLM_MODEL = "mimo-v2.5-pro";
 
 // stderr にダンプする docker コマンドの --env=KEY=VALUE のうち、
 // KEY が _API_KEY / _TOKEN で終わるものの VALUE を *** に置き換えるための正規表現。
@@ -92,20 +96,51 @@ const requireEnv = (name: string): string => {
   return value;
 };
 
-const buildEnvArgs = (
-  herdrPaneId: string,
-  hostProjectName: string,
-  credentials: Credentials,
-): string[] => [
-  `--env=HERDR_PANE_ID=${herdrPaneId}`,
-  `--env=HOST_PROJECT_NAME=${hostProjectName}`,
-  `--env=OCR_LLM_URL=${OCR_LLM_URL}`,
-  `--env=OCR_LLM_TOKEN=${credentials.OPENCODE_API_KEY}`,
-  `--env=OCR_LLM_MODEL=${OCR_LLM_MODEL}`,
-  `--env=XIAOMI_TOKEN_PLAN_SGP_API_KEY=${credentials.XIAOMI_TOKEN_PLAN_SGP_API_KEY}`,
-  `--env=OPENROUTER_API_KEY=${credentials.OPENROUTER_API_KEY}`,
-  `--env=GH_TOKEN=${credentials.GH_TOKEN}`,
-];
+// ホストの cwd をパスセグメント('/' 区切り)に分割し、いずれかのプロファイル名
+// と完全一致するセグメントがあればそれを返す。サブストリング一致(例:
+// cwd='/home/user/framework' で profile='work' が誤検出)を防ぐ。
+// どちらも含まれない場合はエラー(プロファイル自動判別は曖昧さを許容しない)。
+const detectProfileName = (
+  cwd: string,
+  profiles: Record<string, ProfileConfig>,
+): string => {
+  const segments = cwd.split("/");
+  for (const name of Object.keys(profiles)) {
+    if (segments.includes(name)) {
+      return name;
+    }
+  }
+  throw new Error(
+    `カレントディレクトリ '${cwd}' のパスセグメントにプロファイル(${Object.keys(profiles).join(", ")})のいずれも見つかりません。プロファイル名のいずれかをパスセグメントとして含めてください。`,
+  );
+};
+
+const buildEnvArgs = (params: {
+  credentials: Credentials;
+  herdrPaneId: string;
+  hostProjectName: string;
+  profile: ProfileConfig;
+}): string[] => {
+  // profile.OCR_LLM_TOKEN_KEY で指定されたクレデンシャルを取り出して OCR_LLM_TOKEN に注入。
+  // 未定義なら明確なエラーで停止(undefined 文字列が注入されるのを防ぐ)。
+  const ocrToken = params.credentials[params.profile.OCR_LLM_TOKEN_KEY];
+  if (!ocrToken) {
+    throw new Error(
+      `プロファイルが参照するクレデンシャル '${params.profile.OCR_LLM_TOKEN_KEY}' が CREDENTIAL_SOURCES に存在しないか、取得に失敗しました。`,
+    );
+  }
+  return [
+    `--env=HERDR_PANE_ID=${params.herdrPaneId}`,
+    `--env=HOST_PROJECT_NAME=${params.hostProjectName}`,
+    `--env=OCR_USE_ANTHROPIC=${params.profile.OCR_USE_ANTHROPIC}`,
+    `--env=OCR_LLM_URL=${params.profile.OCR_LLM_URL}`,
+    `--env=OCR_LLM_TOKEN=${ocrToken}`,
+    `--env=OCR_LLM_MODEL=${params.profile.OCR_LLM_MODEL}`,
+    `--env=XIAOMI_TOKEN_PLAN_SGP_API_KEY=${params.credentials.XIAOMI_TOKEN_PLAN_SGP_API_KEY}`,
+    `--env=OPENROUTER_API_KEY=${params.credentials.OPENROUTER_API_KEY}`,
+    `--env=GH_TOKEN=${params.credentials.GH_TOKEN}`,
+  ];
+};
 
 const buildVolumeArgs = (home: string): string[] => [
   `--volume=${process.cwd()}:/workspace`,
@@ -171,17 +206,19 @@ interface RunContext {
   herdrPaneId: string;
   home: string;
   hostProjectName: string;
-  piProjects: Record<string, ProjectConfig>;
+  profile: ProfileConfig;
+  projects: Record<string, ProjectConfig>;
 }
 
 const runDockerContainer = (ctx: RunContext): number => {
-  const envArgs = buildEnvArgs(
-    ctx.herdrPaneId,
-    ctx.hostProjectName,
-    ctx.credentials,
-  );
+  const envArgs = buildEnvArgs({
+    credentials: ctx.credentials,
+    herdrPaneId: ctx.herdrPaneId,
+    hostProjectName: ctx.hostProjectName,
+    profile: ctx.profile,
+  });
   const volumeArgs = buildVolumeArgs(ctx.home);
-  const initScript = buildInitScript(ctx.piProjects);
+  const initScript = buildInitScript(ctx.projects);
   const dockerArgs = buildDockerArgs(envArgs, volumeArgs, initScript);
   console.error(`$ docker ${redactSecrets(dockerArgs).join(" ")}`);
   return runDocker(dockerArgs);
@@ -195,8 +232,16 @@ const prepareEnvironment = (): RunContext => {
   // コンテナ内 $PWD は常に /workspace なので basename が 'workspace' 固定になり
   // 自動認識が機能しないため、ホスト側で先に算出する。
   const hostProjectName = basename(process.cwd());
-  const piProjects = loadPiProjects();
-  return { credentials, herdrPaneId, home, hostProjectName, piProjects };
+  const aiEnvConfig: AiEnvConfig = loadAiEnvConfig();
+  const profileName = detectProfileName(process.cwd(), aiEnvConfig.profiles);
+  return {
+    credentials,
+    herdrPaneId,
+    home,
+    hostProjectName,
+    profile: aiEnvConfig.profiles[profileName],
+    projects: aiEnvConfig.projects,
+  };
 };
 
 const handleError = (error: unknown): number => {
