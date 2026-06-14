@@ -44,12 +44,12 @@ const getPiProjectsConfigPath = (): string =>
 // ===== 関数生成 =====
 
 // 任意の値から '--name <value>' フラグ文字列を生成(空文字なら空文字)。
-// 値部分をダブルクォートで囲み、先頭が '-' の値(例: '-h')が CLI パーサーに
-// フラグとして誤解釈されるリスクを排除する。
+// 値は SAFE_ID_PATTERN で英数字・ハイフン・アンダースコアのみに制限済みなので
+// スペース区切り・非クォートで十分。シンプルに保たれる方を採用。
 // no-ternary ルール下で三元演算子を避けるため関数化。
 const buildOptionalFlag = (name: string, value: string | undefined): string => {
   if (value) {
-    return `--${name}="${value}"`;
+    return `--${name} ${value}`;
   }
   return "";
 };
@@ -66,7 +66,7 @@ const generatePiResumeFunc = (
         buildOptionalFlag("provider", config.provider),
         buildOptionalFlag("model", config.model),
         "--thinking high",
-        `--session="${config.session}"`,
+        `--session ${config.session}`,
       ].join(" ");
       return `    ${project}) pi ${flags} ;;`;
     })
