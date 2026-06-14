@@ -44,10 +44,12 @@ const getPiProjectsConfigPath = (): string =>
 // ===== 関数生成 =====
 
 // 任意の値から '--name <value>' フラグ文字列を生成(空文字なら空文字)。
+// 値部分をダブルクォートで囲み、先頭が '-' の値(例: '-h')が CLI パーサーに
+// フラグとして誤解釈されるリスクを排除する。
 // no-ternary ルール下で三元演算子を避けるため関数化。
 const buildOptionalFlag = (name: string, value: string | undefined): string => {
   if (value) {
-    return `--${name} ${value}`;
+    return `--${name}="${value}"`;
   }
   return "";
 };
@@ -64,7 +66,7 @@ const generatePiResumeFunc = (
         buildOptionalFlag("provider", config.provider),
         buildOptionalFlag("model", config.model),
         "--thinking high",
-        `--session ${config.session}`,
+        `--session="${config.session}"`,
       ].join(" ");
       return `    ${project}) pi ${flags} ;;`;
     })
@@ -291,9 +293,6 @@ const extractProjects = (
 // ファイル不在・JSON 不正・構造不正はすべて例外を投げ、
 // main の try/catch で一貫してエラーメッセージ表示 + exit 1 する。
 export const loadPiProjects = (): Record<string, ProjectConfig> => {
-  const configPath = getPiProjectsConfigPath();
-  return extractProjects(
-    configPath,
-    parseConfigJson(configPath, readConfigContent(configPath)),
-  );
+  const cp = getPiProjectsConfigPath();
+  return extractProjects(cp, parseConfigJson(cp, readConfigContent(cp)));
 };
