@@ -44,23 +44,42 @@ ai-env
 
 ## pi セッション再開設定
 
-コンテナ内で `pi-resume <project>` を使うと、事前定義したプロジェクトのセッションを再開できる。
-
 設定は `~/.config/ai-env/pi-projects.json` に JSON ファイルとして配置する。
-リポジトリの [`pi-projects.example.json`](./pi-projects.example.json) を参考に作成すること:
+リポジトリの [`pi-projects.example.json`](./pi-projects.example.json) を参考に作成すること。
+
+### 設定ファイルの構造
 
 ```json
 {
-  "ai-env": {
-    "session": "019ec00f-6774-7719-9d32-0ce0acf7892f",
-    "provider": "opencode-go",
-    "model": "minimax-m3"
+  "profiles": {
+    "pi-private": {
+      "OCR_USE_ANTHROPIC": "false",
+      "OCR_LLM_URL": "https://opencode.ai/zen/go/v1",
+      "OCR_LLM_TOKEN_KEY": "OPENCODE_API_KEY",
+      "OCR_LLM_MODEL": "mimo-v2.5-pro"
+    }
   },
-  "mindmap": "019e9b9f-e299-7b7f-a1c1-cc6c5753efc4"
+  "projects": {
+    "ai-env": {
+      "session": "019ec00f-...",
+      "provider": "opencode-go",
+      "model": "minimax-m3"
+    },
+    "mindmap": "019e9b9f-..."
+  }
 }
 ```
 
-値は文字列(セッション ID のみ)とオブジェクト(`session` 必須、`provider` / `model` 任意)の両方を受け付ける。
-オブジェクト形式の場合、`pi-resume` 実行時は `--provider <p> --model <m> --thinking high --session <s>` の順で組み立てる。`--thinking high` は常に付与される。
+* `profiles`: 仕事用 / プライベート用など用途別のプロファイル。各プロファイルに OCR 全体設定を記述。
+* `projects`: pi セッション再開用のプロジェクト定義。値は文字列(セッション ID のみ)とオブジェクト(`session` 必須、`provider` / `model` 任意)の両方を受け付ける。オブジェクト形式では `pi-resume` 実行時に `--provider <p> --model <m> --thinking high --session <s>` の順で組み立てる(常に `--thinking high` 付与)。
+* `OCR_LLM_TOKEN_KEY`: CREDENTIAL_SOURCES のキー名を指定。`credentials[OCR_LLM_TOKEN_KEY]` の値が `--env=OCR_LLM_TOKEN=...` に注入される。
+
+### プロファイルの自動判別
+
+`ai-env` 実行時のカレントディレクトリに、いずれかのプロファイル名(例: `pi-private`, `pi-work`)が含まれていれば、該当プロファイルが自動選択される。含まれない場合はエラー(利用可能なプロファイル名一覧を案内)。
+
+例:
+* `cd ~/work/pi-work && ai-env` → `pi-work` プロファイルが選択
+* `cd ~/private/pi-private && ai-env` → `pi-private` プロファイルが選択
 
 設定ファイルパスは環境変数 `AI_ENV_PI_PROJECTS` で上書き可能。
