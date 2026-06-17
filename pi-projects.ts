@@ -137,7 +137,7 @@ const generatePiResumeFunc = (
 };
 
 // コンテナ起動直後にコンテナ内で実行する初期化スクリプトを生成。
-// SSH 鍵セットアップ → socat ブリッジ → pi-resume 関数定義 → bash 起動の順。
+// SSH 鍵セットアップ → pm2 管理下の socat ブリッジ → pi-resume 関数定義 → bash 起動の順。
 export const buildInitScript = (
   projects: Record<string, ProjectConfig>,
 ): string => {
@@ -147,7 +147,7 @@ chown -R $(id -u):$(id -g) ~/.ssh && \
 chmod 700 ~/.ssh && \
 find ~/.ssh -type f -exec chmod 600 {} \; && \
 mkdir -p ~/.config/herdr && \
-socat UNIX-LISTEN:/home/pi/.config/herdr/herdr.sock,fork,reuseaddr TCP:host.docker.internal:9123 &
+pm2 start socat --name "herdr-socat" -- UNIX-LISTEN:/home/pi/.config/herdr/herdr.sock,fork,reuseaddr TCP:host.docker.internal:9123
 
 cat << 'PI_RESUME_EOF' >> /home/pi/.bashrc
 ${piResumeFunc}
