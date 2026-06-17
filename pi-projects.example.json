@@ -17,7 +17,8 @@
     "ai-env": {
       "session": "019ec00f-6774-7719-9d32-0ce0acf7892f",
       "provider": "opencode-go",
-      "model": "minimax-m3"
+      "model": "minimax-m3",
+      "apiKeyEnv": "LLM_API_KEY"
     },
     "ignite-timer": "019e950d-d3e4-7f42-ace9-e966f8ad9f27",
     "mindmap": {

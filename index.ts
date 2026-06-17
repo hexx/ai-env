@@ -38,6 +38,11 @@ const CREDENTIAL_SOURCES: CredentialSource[] = [
     name: "GH_TOKEN",
   },
   {
+    args: ["find-generic-password", "-s", "LLM_API_KEY", "-w"],
+    file: "security",
+    name: "LLM_API_KEY",
+  },
+  {
     args: ["find-generic-password", "-s", "OPENCODE_API_KEY", "-w"],
     file: "security",
     name: "OPENCODE_API_KEY",
@@ -137,6 +142,7 @@ const buildEnvArgs = (params: {
     `--env=XIAOMI_TOKEN_PLAN_SGP_API_KEY=${params.credentials.XIAOMI_TOKEN_PLAN_SGP_API_KEY}`,
     `--env=OPENCODE_API_KEY=${params.credentials.OPENCODE_API_KEY}`,
     `--env=OPENROUTER_API_KEY=${params.credentials.OPENROUTER_API_KEY}`,
+    `--env=LLM_API_KEY=${params.credentials.LLM_API_KEY}`,
     `--env=GH_TOKEN=${params.credentials.GH_TOKEN}`,
   ];
 };
