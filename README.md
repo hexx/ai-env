@@ -31,6 +31,20 @@ npm install -g .
 ai-env
 ```
 
+## Dockerイメージのビルド
+
+`pi-sandbox` イメージはリポジトリの `Dockerfile` からビルドする:
+
+```bash
+# ビルド
+docker build -t pi-sandbox .
+
+# ビルド済みイメージの確認
+docker images | grep pi-sandbox
+```
+
+リポジトリで `Dockerfile` が更新された場合は、上記コマンドで再ビルドする。
+
 ## クレデンシャル
 
 以下のクレデンシャルを実行時に動的に取得する:
@@ -40,6 +54,7 @@ ai-env
 | `XIAOMI_TOKEN_PLAN_SGP_API_KEY` | macOS Keychain |
 | `OPENCODE_API_KEY` | macOS Keychain |
 | `OPENROUTER_API_KEY` | macOS Keychain |
+| `LLM_API_KEY` | macOS Keychain |
 | `GH_TOKEN` | `gh auth token` |
 
 ## pi セッション再開設定
