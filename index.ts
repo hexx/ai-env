@@ -135,6 +135,7 @@ const buildEnvArgs = (params: {
     `--env=OCR_LLM_TOKEN=${ocrToken}`,
     `--env=OCR_LLM_MODEL=${params.profile.OCR_LLM_MODEL}`,
     `--env=XIAOMI_TOKEN_PLAN_SGP_API_KEY=${params.credentials.XIAOMI_TOKEN_PLAN_SGP_API_KEY}`,
+    `--env=OPENCODE_API_KEY=${params.credentials.OPENCODE_API_KEY}`,
     `--env=OPENROUTER_API_KEY=${params.credentials.OPENROUTER_API_KEY}`,
     `--env=GH_TOKEN=${params.credentials.GH_TOKEN}`,
   ];
