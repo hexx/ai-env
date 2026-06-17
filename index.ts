@@ -13,7 +13,7 @@ import { platform } from "node:os";
 // ===== 定数 =====
 
 const EXIT_ERROR = 1;
-const IMAGE_NAME = "pi-private-sandbox";
+const IMAGE_NAME = "pi-sandbox";
 
 // stderr にダンプする docker コマンドの --env=KEY=VALUE のうち、
 // KEY が _API_KEY / _TOKEN で終わるものの VALUE を *** に置き換えるための正規表現。
