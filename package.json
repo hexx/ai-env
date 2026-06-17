@@ -3,13 +3,12 @@
   "version": "0.1.0",
   "description": "私専用のAI開発用Dockerサンドボックス環境を簡単に起動するCLI",
   "private": true,
-  "type": "module",
   "bin": {
     "ai-env": "./dist/index.js"
   },
   "scripts": {
     "start": "tsx index.ts",
-    "build": "esbuild index.ts --bundle --platform=node --format=esm --packages=external --banner:js=\"#!/usr/bin/env node\" --outfile=dist/index.js",
+    "build": "esbuild index.ts --bundle --platform=node --format=cjs --banner:js=\"#!/usr/bin/env node\" --outfile=dist/index.js",
     "prepack": "npm run build"
   },
   "engines": {
