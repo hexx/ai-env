@@ -31,11 +31,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # 2. 開発ツール・ライブラリのセットアップ
 # =========================================================
 # 必須npmパッケージのグローバルインストール
-RUN npm install -g playwright @earendil-works/pi-coding-agent @alibaba-group/open-code-review
+# - playwright はバージョン固定(@latest でビルドごとに予期せぬメジャーバージョン
+#   アップが入るのを防ぐ)
+# - pi-coding-agent / open-code-review は @latest を意図的に指定し、
+#   ビルドごとに最新版を取得
+# - --no-cache でレイヤにnpmキャッシュを残さない(イメージサイズ削減)
+RUN npm install -g --no-cache \
+        playwright@1.52 \
+        @earendil-works/pi-coding-agent@latest \
+        @alibaba-group/open-code-review@latest
 
-# Playwrightブラウザ本体と依存ライブラリのインストール、および全ユーザーへのアクセス権限付与
+# Playwrightブラウザ本体と依存ライブラリのインストール。
+# パーミッションは 755 とし、pi ユーザーがブラウザバイナリを実行できるが
+# 改ざんできないように。所有者は root のままにする。
 RUN npx playwright install --with-deps \
-    && chmod -R 777 /ms-playwright
+    && chmod -R 755 /ms-playwright
 
 # =========================================================
 # 3. 実行ユーザーと環境の設定
@@ -45,12 +55,18 @@ RUN groupadd -r pi && useradd -r -m -g pi pi
 
 WORKDIR /workspace
 
-# pi-coding-agent を最新状態へアップデート
-RUN pi update
-
 USER pi
 
+# pi-coding-agent を最新状態へアップデート
+# pi ユーザー権限で実行することで、設定ファイル等が
+# pi 所有で作成される (root 所有だと pi が書き換えられない)
+RUN pi update
+
 # herdr のインストール
+# サプライチェーンリスク: ダウンロードしたスクリプトを直接実行しているため
+# herdr.dev のエンドポイントが改ざんされた場合に任意コードが実行される可能性あり。
+# herdr 公式のインストール方法に従っているため、本 Dockerfile ではチェックサム
+# 検証を追加できない。将来的にパッケージマネージャー対応があれば移行推奨。
 RUN curl -fsSL https://herdr.dev/install.sh | sh
 
 # =========================================================
