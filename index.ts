@@ -1,5 +1,3 @@
-#!/usr/bin/env -S npx tsx
-
 import {
   type AiEnvConfig,
   type ProfileConfig,

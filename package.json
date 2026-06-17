@@ -5,19 +5,27 @@
   "private": true,
   "type": "module",
   "bin": {
-    "ai-env": "./index.ts"
+    "ai-env": "./dist/index.js"
   },
   "scripts": {
-    "start": "tsx index.ts"
+    "start": "tsx index.ts",
+    "build": "esbuild index.ts --bundle --platform=node --format=esm --packages=external --banner:js=\"#!/usr/bin/env node\" --outfile=dist/index.js",
+    "prepack": "npm run build"
   },
   "engines": {
     "node": ">=20"
   },
+  "files": [
+    "dist",
+    "package.json",
+    "README.md"
+  ],
   "dependencies": {
     "commander": "^14.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "esbuild": "^0.25.0",
     "oxlint": "^1.69.0",
     "tsx": "^4.20.0",
     "typescript": "^5.7.0"
