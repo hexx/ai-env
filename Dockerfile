@@ -31,13 +31,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # 2. 開発ツール・ライブラリのセットアップ
 # =========================================================
 # 必須npmパッケージのグローバルインストール
-# - playwright はバージョン固定(@latest でビルドごとに予期せぬメジャーバージョン
-#   アップが入るのを防ぐ)
+# - playwright は @latest を指定
+#   (バージョン固定すると依存解決の兼ね合いでビルドが失敗する場合があるため)
 # - pi-coding-agent / open-code-review は @latest を意図的に指定し、
 #   ビルドごとに最新版を取得
 # - --no-cache でレイヤにnpmキャッシュを残さない(イメージサイズ削減)
 RUN npm install -g --no-cache \
-        playwright@1.52 \
+        playwright@latest \
         @earendil-works/pi-coding-agent@latest \
         @alibaba-group/open-code-review@latest
 
