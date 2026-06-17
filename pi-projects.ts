@@ -18,6 +18,7 @@ export interface ProjectConfig {
   session: string;
   provider?: string;
   model?: string;
+  apiKeyEnv?: string;
 }
 
 // プロファイル 1 個ぶんの OCR 全体設定。
@@ -90,9 +91,19 @@ const generatePiResumeFunc = (
 ): string => {
   const cases = Object.entries(projects)
     .map(([project, config]) => {
+      // apiKeyEnv が指定されている場合のみ '--api-key "$<ENV>"' フラグを追加。
+      // ダブルクォートで囲むのは値にスペース等が含まれる可能性に備えるため。
+      // テンプレートリテラル内 '$${config.apiKeyEnv}' は '$' + 補間値となり、
+      // 生成されるシェルでは $ENV がランタイムで展開される。
+      // (issue 仕様書にある '\\$${...}' はバックスラッシュが入ってしまい誤り)
+      let apiKeyFlag = "";
+      if (config.apiKeyEnv) {
+        apiKeyFlag = `--api-key "$${config.apiKeyEnv}"`;
+      }
       const flags = [
         buildOptionalFlag("provider", config.provider),
         buildOptionalFlag("model", config.model),
+        apiKeyFlag,
         "--thinking high",
         `--session ${config.session}`,
       ].join(" ");
@@ -339,6 +350,9 @@ const parseProjectObjectValue = (
   }
   if ("model" in obj) {
     config.model = requireSafeId({ configPath, fieldName: "model", key, pattern: SAFE_SHELL_PATTERN, rawValue: obj.model });
+  }
+  if ("apiKeyEnv" in obj) {
+    config.apiKeyEnv = requireSafeId({ configPath, fieldName: "apiKeyEnv", key, pattern: SAFE_SHELL_PATTERN, rawValue: obj.apiKeyEnv });
   }
   return config;
 };
