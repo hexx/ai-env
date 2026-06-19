@@ -8,6 +8,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
+import stripJsonComments from "strip-json-comments";
 
 // ===== 型定義 =====
 
@@ -191,10 +192,12 @@ const readConfigContent = (configPath: string): string => {
   }
 };
 
-// JSON パースを実行。失敗時はファイル名と原因を含めて再 throw。
+// JSONC (JSON with Comments) パースを実行。
+// コメントを除去した後に JSON.parse を実行し、失敗時はファイル名と原因を含めて再 throw。
 const parseConfigJson = (configPath: string, content: string): unknown => {
   try {
-    return JSON.parse(content);
+    const stripped = stripJsonComments(content);
+    return JSON.parse(stripped);
   } catch (error) {
     throw new Error(
       `設定ファイル ${configPath} の JSON パースに失敗: ${errorMessage(error)}`,
