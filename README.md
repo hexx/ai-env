@@ -61,6 +61,7 @@ docker images | grep pi-sandbox
 
 設定は `~/.config/ai-env/pi-projects.json` に JSON ファイルとして配置する。
 リポジトリの [`pi-projects.example.json`](./pi-projects.example.json) を参考に作成すること。
+設定ファイルは JSONC (JSON with Comments) 形式をサポートしており、`//` 行コメントや `/* */` ブロックコメントを使用できる。
 
 ### 設定ファイルの構造
 

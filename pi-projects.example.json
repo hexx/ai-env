@@ -1,7 +1,10 @@
 {
+  // プロファイル定義 (仕事用/プライベート用)
+  // 各プロファイルに OCR 全体設定を記述
   "profiles": {
     "pi-private": {
       "OCR_USE_ANTHROPIC": "false",
+      // OpenCode のエンドポイント
       "OCR_LLM_URL": "https://opencode.ai/zen/go/v1",
       "OCR_LLM_TOKEN_KEY": "OPENCODE_API_KEY",
       "OCR_LLM_MODEL": "mimo-v2.5-pro"
@@ -13,6 +16,9 @@
       "OCR_LLM_MODEL": "claude-3-5-sonnet-20241022"
     }
   },
+  // プロジェクトごとの pi セッション設定
+  // オブジェクト形式: session 必須, provider / model / apiKeyEnv 任意
+  // 文字列形式: セッション ID のみ (後方互換)
   "projects": {
     "ai-env": {
       "session": "019ec00f-6774-7719-9d32-0ce0acf7892f",
@@ -24,6 +30,7 @@
     "mindmap": {
       "session": "019e9b9f-e299-7b7f-a1c1-cc6c5753efc4"
     },
+    /* 以下は文字列形式の短縮記法 */
     "misskey-pwa": "019e96ce-b2dc-7716-bab8-e53e74f1b0fd",
     "org-toolkit": "019ea73e-d499-7337-a4d8-d12d8be06c1a",
     "rss-reader": "019e99bb-c065-77cf-a458-a38ce1c0ef9e",
