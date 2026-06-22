@@ -377,9 +377,6 @@ const parseProjectObjectValue = (
   return config;
 };
 
-// 単一プロファイルをパース・検証。必須 4 フィールド(OCR_*)は SAFE_ENV_PATTERN、
-// オプション(provider/model)は SAFE_SHELL_PATTERN でバリデーション。
-
 // 単一の (key, value) エントリを ProjectConfig に変換。文字列とオブジェクトの両対応。
 const parseProjectEntry = (
   configPath: string,
