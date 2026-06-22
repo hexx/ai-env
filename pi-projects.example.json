@@ -13,7 +13,10 @@
       "OCR_USE_ANTHROPIC": "true",
       "OCR_LLM_URL": "https://api.anthropic.com/v1/messages",
       "OCR_LLM_TOKEN_KEY": "WORK_API_KEY",
-      "OCR_LLM_MODEL": "claude-3-5-sonnet-20241022"
+      "OCR_LLM_MODEL": "claude-3-5-sonnet-20241022",
+      // デフォルトの provider/model (プロジェクト側で未指定の場合にフォールバック)
+      "provider": "anthropic",
+      "model": "claude-3-5-sonnet-20241022"
     }
   },
   // プロジェクトごとの pi セッション設定

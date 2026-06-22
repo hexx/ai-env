@@ -30,6 +30,8 @@ export interface ProfileConfig {
   OCR_LLM_URL: string;
   OCR_LLM_TOKEN_KEY: string;
   OCR_LLM_MODEL: string;
+  provider?: string;
+  model?: string;
 }
 
 // 設定ファイル全体の構造。
@@ -95,6 +97,8 @@ const buildOptionalFlag = (name: string, value: string | undefined): string => {
 // provider / model は存在する場合のみ付与。
 const generatePiResumeFunc = (
   projects: Record<string, ProjectConfig>,
+  defaultProvider: string | undefined,
+  defaultModel: string | undefined,
 ): string => {
   const cases = Object.entries(projects)
     .map(([project, config]) => {
@@ -107,9 +111,12 @@ const generatePiResumeFunc = (
       if (config.apiKeyEnv) {
         apiKeyFlag = `--api-key "$${config.apiKeyEnv}"`;
       }
+      // プロジェクト側で未指定の場合、プロファイルのデフォルト値をフォールバック
+      const provider = config.provider ?? defaultProvider;
+      const model = config.model ?? defaultModel;
       const flags = [
-        buildOptionalFlag("provider", config.provider),
-        buildOptionalFlag("model", config.model),
+        buildOptionalFlag("provider", provider),
+        buildOptionalFlag("model", model),
         apiKeyFlag,
         "--thinking high",
         `--session ${config.session}`,
@@ -141,8 +148,10 @@ const generatePiResumeFunc = (
 // SSH 鍵セットアップ → pm2 管理下の socat ブリッジ → pi-resume 関数定義 → bash 起動の順。
 export const buildInitScript = (
   projects: Record<string, ProjectConfig>,
+  defaultProvider: string | undefined,
+  defaultModel: string | undefined,
 ): string => {
-  const piResumeFunc = generatePiResumeFunc(projects);
+  const piResumeFunc = generatePiResumeFunc(projects, defaultProvider, defaultModel);
   return String.raw`cp -r /tmp/.ssh ~/.ssh && \
 chown -R $(id -u):$(id -g) ~/.ssh && \
 chmod 700 ~/.ssh && \
@@ -278,47 +287,48 @@ const requireSafeId = (params: {
   return rawValue;
 };
 
-// 単一プロファイルをパース・検証。4 つの必須文字列フィールドを SAFE_ENV_PATTERN で検証。
+// プロファイルの必須 OCR フィールド 4 つを SAFE_ENV_PATTERN で検証。
+const parseProfileOcrFields = (
+  configPath: string,
+  name: string,
+  profileObj: Record<string, unknown>,
+): ProfileConfig => {
+  const key = `profiles.${name}`;
+  const OCR_LLM_MODEL = requireSafeId({ configPath, fieldName: "OCR_LLM_MODEL", key, pattern: SAFE_ENV_PATTERN, rawValue: profileObj.OCR_LLM_MODEL });
+  const OCR_LLM_TOKEN_KEY = requireSafeId({ configPath, fieldName: "OCR_LLM_TOKEN_KEY", key, pattern: SAFE_ENV_PATTERN, rawValue: profileObj.OCR_LLM_TOKEN_KEY });
+  const OCR_LLM_URL = requireSafeId({ configPath, fieldName: "OCR_LLM_URL", key, pattern: SAFE_ENV_PATTERN, rawValue: profileObj.OCR_LLM_URL });
+  const OCR_USE_ANTHROPIC = requireSafeId({ configPath, fieldName: "OCR_USE_ANTHROPIC", key, pattern: SAFE_ENV_PATTERN, rawValue: profileObj.OCR_USE_ANTHROPIC });
+  return { OCR_LLM_MODEL, OCR_LLM_TOKEN_KEY, OCR_LLM_URL, OCR_USE_ANTHROPIC };
+};
+
+// プロファイルのオプション(provider/model)を SAFE_SHELL_PATTERN で検証。
+const parseProfileOptionalFields = (params: {
+  configPath: string;
+  name: string;
+  profileObj: Record<string, unknown>;
+  result: ProfileConfig;
+}): void => {
+  const { configPath, name, profileObj, result } = params;
+  const key = `profiles.${name}`;
+  if ("provider" in profileObj) {
+    result.provider = requireSafeId({ configPath, fieldName: "provider", key, pattern: SAFE_SHELL_PATTERN, rawValue: profileObj.provider });
+  }
+  if ("model" in profileObj) {
+    result.model = requireSafeId({ configPath, fieldName: "model", key, pattern: SAFE_SHELL_PATTERN, rawValue: profileObj.model });
+  }
+};
+
+// 単一プロファイルをパース・検証。必須 4 フィールド(OCR_*)は SAFE_ENV_PATTERN、
+// オプション(provider/model)は SAFE_SHELL_PATTERN でバリデーション。
 const parseProfileEntry = (
   configPath: string,
   name: string,
   raw: unknown,
 ): ProfileConfig => {
   const profileObj = toPlainObject(configPath, `profiles.${name}`, raw);
-  const OCR_LLM_MODEL = requireSafeId({
-    configPath,
-    fieldName: "OCR_LLM_MODEL",
-    key: `profiles.${name}`,
-    pattern: SAFE_ENV_PATTERN,
-    rawValue: profileObj.OCR_LLM_MODEL,
-  });
-  const OCR_LLM_TOKEN_KEY = requireSafeId({
-    configPath,
-    fieldName: "OCR_LLM_TOKEN_KEY",
-    key: `profiles.${name}`,
-    pattern: SAFE_ENV_PATTERN,
-    rawValue: profileObj.OCR_LLM_TOKEN_KEY,
-  });
-  const OCR_LLM_URL = requireSafeId({
-    configPath,
-    fieldName: "OCR_LLM_URL",
-    key: `profiles.${name}`,
-    pattern: SAFE_ENV_PATTERN,
-    rawValue: profileObj.OCR_LLM_URL,
-  });
-  const OCR_USE_ANTHROPIC = requireSafeId({
-    configPath,
-    fieldName: "OCR_USE_ANTHROPIC",
-    key: `profiles.${name}`,
-    pattern: SAFE_ENV_PATTERN,
-    rawValue: profileObj.OCR_USE_ANTHROPIC,
-  });
-  return {
-    OCR_LLM_MODEL,
-    OCR_LLM_TOKEN_KEY,
-    OCR_LLM_URL,
-    OCR_USE_ANTHROPIC,
-  };
+  const result = parseProfileOcrFields(configPath, name, profileObj);
+  parseProfileOptionalFields({ configPath, name, profileObj, result });
+  return result;
 };
 
 // profiles ブロックをパース・検証。Record<string, ProfileConfig> に変換。
@@ -366,6 +376,9 @@ const parseProjectObjectValue = (
   }
   return config;
 };
+
+// 単一プロファイルをパース・検証。必須 4 フィールド(OCR_*)は SAFE_ENV_PATTERN、
+// オプション(provider/model)は SAFE_SHELL_PATTERN でバリデーション。
 
 // 単一の (key, value) エントリを ProjectConfig に変換。文字列とオブジェクトの両対応。
 const parseProjectEntry = (
