@@ -223,7 +223,7 @@ const runDockerContainer = (ctx: RunContext): number => {
     profile: ctx.profile,
   });
   const volumeArgs = buildVolumeArgs(ctx.home);
-  const initScript = buildInitScript(ctx.projects);
+  const initScript = buildInitScript(ctx.projects, ctx.profile.provider, ctx.profile.model);
   const dockerArgs = buildDockerArgs(envArgs, volumeArgs, initScript);
   console.error(`$ docker ${redactSecrets(dockerArgs).join(" ")}`);
   return runDocker(dockerArgs);
