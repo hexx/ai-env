@@ -145,7 +145,8 @@ const generatePiResumeFunc = (
 };
 
 // コンテナ起動直後にコンテナ内で実行する初期化スクリプトを生成。
-// SSH 鍵セットアップ → pm2 管理下の socat ブリッジ → pi-resume 関数定義 → bash 起動の順。
+// SSH 鍵セットアップ → pm2 管理下の socat ブリッジ → pi-resume 関数定義 → pi 起動の順。
+// pi 終了時に pm2 をクリーンアップしてコンテナを終了する。
 export const buildInitScript = (
   projects: Record<string, ProjectConfig>,
   defaultProvider: string | undefined,
@@ -163,7 +164,9 @@ cat << 'PI_RESUME_EOF' >> /home/pi/.bashrc
 ${piResumeFunc}
 PI_RESUME_EOF
 
-exec /bin/bash`;
+pi
+pm2 kill
+exit 0`;
 };
 
 // ===== 設定読み込み =====
