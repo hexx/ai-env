@@ -213,6 +213,7 @@ interface RunContext {
   hostProjectName: string;
   profile: ProfileConfig;
   projects: Record<string, ProjectConfig>;
+  bashMode: boolean;
 }
 
 const runDockerContainer = (ctx: RunContext): number => {
@@ -223,13 +224,18 @@ const runDockerContainer = (ctx: RunContext): number => {
     profile: ctx.profile,
   });
   const volumeArgs = buildVolumeArgs(ctx.home);
-  const initScript = buildInitScript(ctx.projects, ctx.profile.provider, ctx.profile.model);
+  const initScript = buildInitScript({
+    bashMode: ctx.bashMode,
+    defaultModel: ctx.profile.model,
+    defaultProvider: ctx.profile.provider,
+    projects: ctx.projects,
+  });
   const dockerArgs = buildDockerArgs(envArgs, volumeArgs, initScript);
   console.error(`$ docker ${redactSecrets(dockerArgs).join(" ")}`);
   return runDocker(dockerArgs);
 };
 
-const prepareEnvironment = (): RunContext => {
+const prepareEnvironment = (bashMode: boolean): RunContext => {
   const credentials = loadCredentials();
   const home = requireEnv("HOME");
   const herdrPaneId = requireEnv("HERDR_PANE_ID");
@@ -240,6 +246,7 @@ const prepareEnvironment = (): RunContext => {
   const aiEnvConfig: AiEnvConfig = loadAiEnvConfig();
   const profileName = detectProfileName(process.cwd(), aiEnvConfig.profiles);
   return {
+    bashMode,
     credentials,
     herdrPaneId,
     home,
@@ -260,7 +267,7 @@ const handleError = (error: unknown): number => {
 
 // ===== メイン処理 =====
 
-const main = (): number => {
+const main = (bashMode: boolean): number => {
   try {
     if (!isMacOS()) {
       console.error(
@@ -268,7 +275,7 @@ const main = (): number => {
       );
       return EXIT_ERROR;
     }
-    return runDockerContainer(prepareEnvironment());
+    return runDockerContainer(prepareEnvironment(bashMode));
   } catch (error) {
     return handleError(error);
   }
@@ -282,8 +289,9 @@ program
   .name("ai-env")
   .description("私専用のAI開発用Dockerサンドボックス環境を簡単に起動するCLI")
   .version("0.1.0")
-  .action(() => {
-    process.exit(main());
+  .option("--bash", "pi を起動せずに bash シェルのみを起動する")
+  .action((options: { bash?: boolean }) => {
+    process.exit(main(options.bash ?? false));
   });
 
 program.parse();
