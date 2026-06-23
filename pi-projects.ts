@@ -164,7 +164,7 @@ cat << 'PI_RESUME_EOF' >> /home/pi/.bashrc
 ${piResumeFunc}
 PI_RESUME_EOF
 
-source /home/pi/.bashrc
+${piResumeFunc}
 pi-resume
 rc=$?
 pm2 kill
