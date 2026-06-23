@@ -165,8 +165,9 @@ ${piResumeFunc}
 PI_RESUME_EOF
 
 pi
+rc=$?
 pm2 kill
-exit 0`;
+exit $rc`;
 };
 
 // ===== 設定読み込み =====
