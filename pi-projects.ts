@@ -66,7 +66,7 @@ const SAFE_SHELL_PATTERN = /^[a-zA-Z0-9._-]+$/u;
 // ドット(.)やハイフン(-)は不可(シェルが $MY.KEY を $MY として展開するため)。
 const SAFE_ENV_NAME_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/u;
 
-// OCR_LLM_URL やより複雑な model 名など「docker --env=KEY=VALUE の値として
+// OCR_LLM_URL やより複雑な model 名など「container --env=KEY=VALUE の値として
 // そのまま渡す」用途に許容する文字セット。spawnSync 経由なのでシェルを
 // 通さず、VALUE 内のスペース以外で分割されることはない。URL で必要になる
 // ':' '/' '@' '?' '&' '=' '#' '%' '+' を含むことができる。

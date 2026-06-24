@@ -37,10 +37,10 @@ ai-env
 
 ```bash
 # ビルド
-docker build -t pi-sandbox .
+container build -t pi-sandbox .
 
 # ビルド済みイメージの確認
-docker images | grep pi-sandbox
+container images | grep pi-sandbox
 ```
 
 リポジトリで `Dockerfile` が更新された場合は、上記コマンドで再ビルドする。
