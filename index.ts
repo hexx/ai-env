@@ -1,3 +1,5 @@
+/* oxlint-disable max-lines -- ホスト IP 取得や --bash オプション追加により行数が増える */
+
 import {
   type AiEnvConfig,
   type ProfileConfig,
@@ -75,6 +77,32 @@ type Credentials = Record<
 // ===== ヘルパー関数 =====
 
 /**
+ * macOS の en0 インターフェースからホストの IP アドレスを取得する。
+ * Apple Container では host.docker.internal が使えないため、
+ * ホスト IP を明示的にコンテナに渡す必要がある。
+ */
+const getHostIp = (): string => {
+  try {
+    return execFileSync("ipconfig", ["getifaddr", "en0"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    // en0 が使えない場合は en1 を試す (有線/無線の切り替え対応)
+    try {
+      return execFileSync("ipconfig", ["getifaddr", "en1"], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      }).trim();
+    } catch {
+      throw new Error(
+        "ホストの IP アドレスを取得できませんでした。ネットワーク接続を確認してください。",
+      );
+    }
+  }
+};
+
+/**
  * 指定した実行ファイルを引数配列で実行し、標準出力の内容を trim して返す。
  * 取得に失敗した場合は空文字を返す。
  * execFileSync を使うことでシェル経由のインジェクションを防ぐ。
@@ -121,6 +149,7 @@ const detectProfileName = (
 const buildEnvArgs = (params: {
   credentials: Credentials;
   herdrPaneId: string;
+  hostIp: string;
   hostProjectName: string;
   profile: ProfileConfig;
 }): string[] => {
@@ -134,6 +163,7 @@ const buildEnvArgs = (params: {
   }
   return [
     `--env=HERDR_PANE_ID=${params.herdrPaneId}`,
+    `--env=HOST_IP=${params.hostIp}`,
     `--env=HOST_PROJECT_NAME=${params.hostProjectName}`,
     `--env=OCR_USE_ANTHROPIC=${params.profile.OCR_USE_ANTHROPIC}`,
     `--env=OCR_LLM_URL=${params.profile.OCR_LLM_URL}`,
@@ -207,19 +237,21 @@ const isMacOS = (): boolean => platform() === "darwin";
 // runDockerContainer の引数をまとめて渡すための型。
 // パラメータ数を抑えつつ、コンテキストを明示的に扱えるようにする。
 interface RunContext {
+  bashMode: boolean;
   credentials: Credentials;
   herdrPaneId: string;
   home: string;
+  hostIp: string;
   hostProjectName: string;
   profile: ProfileConfig;
   projects: Record<string, ProjectConfig>;
-  bashMode: boolean;
 }
 
 const runDockerContainer = (ctx: RunContext): number => {
   const envArgs = buildEnvArgs({
     credentials: ctx.credentials,
     herdrPaneId: ctx.herdrPaneId,
+    hostIp: ctx.hostIp,
     hostProjectName: ctx.hostProjectName,
     profile: ctx.profile,
   });
@@ -250,6 +282,7 @@ const prepareEnvironment = (bashMode: boolean): RunContext => {
     credentials,
     herdrPaneId,
     home,
+    hostIp: getHostIp(),
     hostProjectName,
     profile: aiEnvConfig.profiles[profileName],
     projects: aiEnvConfig.projects,
@@ -271,7 +304,7 @@ const main = (bashMode: boolean): number => {
   try {
     if (!isMacOS()) {
       console.error(
-        "ai-env は macOS 専用です(macOS Keychain 'security' コマンド / 'host.docker.internal' を前提にしています)。",
+        "ai-env は macOS 専用です(macOS Keychain 'security' コマンド / 'ホスト IP 取得に 'ipconfig' を前提にしています)。",
       );
       return EXIT_ERROR;
     }
