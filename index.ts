@@ -17,7 +17,7 @@ import { platform } from "node:os";
 const EXIT_ERROR = 1;
 const IMAGE_NAME = "pi-sandbox";
 
-// stderr にダンプする docker コマンドの --env=KEY=VALUE のうち、
+// stderr にダンプする container コマンドの --env=KEY=VALUE のうち、
 // KEY が _API_KEY / _TOKEN で終わるものの VALUE を *** に置き換えるための正規表現。
 const SECRET_ENV_PATTERN =
   /^--env=(?<key>[A-Z0-9_]+(?:_API_KEY|_TOKEN))=.*$/u;
@@ -78,7 +78,7 @@ type Credentials = Record<
 
 /**
  * macOS の en0 インターフェースからホストの IP アドレスを取得する。
- * Apple Container では host.docker.internal が使えないため、
+ * Apple Container では host.docker.internal (Docker の特殊ホスト名) が使えないため、
  * ホスト IP を明示的にコンテナに渡す必要がある。
  */
 const getHostIp = (): string => {
@@ -183,7 +183,7 @@ const buildVolumeArgs = (home: string): string[] => [
   `--volume=${home}/.pi:/home/pi/.pi`,
 ];
 
-const buildDockerArgs = (
+const buildContainerArgs = (
   envArgs: string[],
   volumeArgs: string[],
   initScript: string,
@@ -217,16 +217,16 @@ const loadCredentials = (): Credentials => {
 const redactSecrets = (args: string[]): string[] =>
   args.map((arg) => arg.replace(SECRET_ENV_PATTERN, "--env=$<key>=***"));
 
-const runDocker = (args: string[]): number => {
-  const result = spawnSync("docker", args, { stdio: "inherit" });
+const runContainer = (args: string[]): number => {
+  const result = spawnSync("container", args, { stdio: "inherit" });
   if (result.error) {
-    console.error("dockerの実行に失敗しました:", result.error.message);
+    console.error("container の実行に失敗しました:", result.error.message);
     return EXIT_ERROR;
   }
   if (result.signal) {
     // 子プロセスがシグナルで終了した場合、status は null になる。
     // 原因をユーザーに伝えるため、シグナル名を stderr に出力する。
-    console.error(`dockerがシグナル ${result.signal} で終了しました。`);
+    console.error(`container がシグナル ${result.signal} で終了しました。`);
     return EXIT_ERROR;
   }
   return result.status ?? EXIT_ERROR;
@@ -234,7 +234,7 @@ const runDocker = (args: string[]): number => {
 
 const isMacOS = (): boolean => platform() === "darwin";
 
-// runDockerContainer の引数をまとめて渡すための型。
+// runContainer の引数をまとめて渡すための型。
 // パラメータ数を抑えつつ、コンテキストを明示的に扱えるようにする。
 interface RunContext {
   bashMode: boolean;
@@ -247,7 +247,7 @@ interface RunContext {
   projects: Record<string, ProjectConfig>;
 }
 
-const runDockerContainer = (ctx: RunContext): number => {
+const runContainerCommand = (ctx: RunContext): number => {
   const envArgs = buildEnvArgs({
     credentials: ctx.credentials,
     herdrPaneId: ctx.herdrPaneId,
@@ -262,9 +262,9 @@ const runDockerContainer = (ctx: RunContext): number => {
     defaultProvider: ctx.profile.provider,
     projects: ctx.projects,
   });
-  const dockerArgs = buildDockerArgs(envArgs, volumeArgs, initScript);
-  console.error(`$ docker ${redactSecrets(dockerArgs).join(" ")}`);
-  return runDocker(dockerArgs);
+  const containerArgs = buildContainerArgs(envArgs, volumeArgs, initScript);
+  console.error(`$ container ${redactSecrets(containerArgs).join(" ")}`);
+  return runContainer(containerArgs);
 };
 
 const prepareEnvironment = (bashMode: boolean): RunContext => {
@@ -308,7 +308,7 @@ const main = (bashMode: boolean): number => {
       );
       return EXIT_ERROR;
     }
-    return runDockerContainer(prepareEnvironment(bashMode));
+    return runContainerCommand(prepareEnvironment(bashMode));
   } catch (error) {
     return handleError(error);
   }
