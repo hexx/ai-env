@@ -60,10 +60,10 @@ WORKDIR /workspace
 # pi-coding-agent を最新状態へアップデート
 # root 権限で実行(pi ユーザー作成後に USER pi で権限を落とす前に実行)
 # ENV CACHE の値を変更すると、Docker レイヤーキャッシュがバスティングされ
-# この行以降のレイヤー(含む RUN pi update)が再実行される。
-# pi update を再実行したい場合は、CACHE の値を任意の文字列に変更する。
+# この行以降のレイヤー(含む RUN pi update --all)が再実行される。
+# pi update --all を再実行したい場合は、CACHE の値を任意の文字列に変更する。
 ENV CACHE="20260623"
-RUN pi update
+RUN pi update --all
 
 USER pi
 
