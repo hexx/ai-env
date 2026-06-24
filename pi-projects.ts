@@ -147,6 +147,12 @@ const generatePiResumeFunc = (
 // コンテナ起動直後にコンテナ内で実行する初期化スクリプトを生成。
 // SSH 鍵セットアップ → pm2 管理下の socat ブリッジ → pi-resume 関数定義 → pi 起動の順。
 // pi 終了時に pm2 をクリーンアップしてコンテナを終了する。
+// bash で $HOST_IP を変数展開するための参照文字列を返す。
+// String.raw 内で '${HOST_IP}' を直接書くと TypeScript テンプレート式として
+// 解釈されるため、ヘルパー関数を経由して文字列として埋め込む。
+// oxlint-disable-next-line no-template-curly-in-string
+const hostIpRef = (): string => "${HOST_IP}";
+
 export const buildInitScript = (params: {
   projects: Record<string, ProjectConfig>;
   defaultProvider: string | undefined;
@@ -155,12 +161,13 @@ export const buildInitScript = (params: {
 }): string => {
   const { projects, defaultProvider, defaultModel, bashMode = false } = params;
   const piResumeFunc = generatePiResumeFunc(projects, defaultProvider, defaultModel);
+
   const commonScript = String.raw`cp -r /tmp/.ssh ~/.ssh && \
 chown -R $(id -u):$(id -g) ~/.ssh && \
 chmod 700 ~/.ssh && \
 find ~/.ssh -type f -exec chmod 600 {} \; && \
 mkdir -p ~/.config/herdr && \
-pm2 start socat --name "herdr-socat" -- UNIX-LISTEN:/home/pi/.config/herdr/herdr.sock,fork,reuseaddr TCP:\${HOST_IP}:9123
+pm2 start socat --name "herdr-socat" -- UNIX-LISTEN:/home/pi/.config/herdr/herdr.sock,fork,reuseaddr TCP:${hostIpRef()}:9123
 
 cat << 'PI_RESUME_EOF' >> /home/pi/.bashrc
 ${piResumeFunc}
