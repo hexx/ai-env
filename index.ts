@@ -304,7 +304,7 @@ const main = (bashMode: boolean): number => {
   try {
     if (!isMacOS()) {
       console.error(
-        "ai-env は macOS 専用です(macOS Keychain 'security' コマンド / 'ホスト IP 取得に 'ipconfig' を前提にしています)。",
+        "ai-env は macOS 専用です(macOS Keychain 'security' コマンド / ホスト IP 取得に 'ipconfig' を前提にしています)。",
       );
       return EXIT_ERROR;
     }
