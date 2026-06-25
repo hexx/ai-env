@@ -26,6 +26,8 @@ export interface ProjectConfig {
 // プロファイル 1 個ぶんの OCR 全体設定。
 // OCR_LLM_TOKEN_KEY には CREDENTIAL_SOURCES のキー名(例: "OPENCODE_API_KEY")を
 // 指定し、credentials[OCR_LLM_TOKEN_KEY] を --env=OCR_LLM_TOKEN= に注入する。
+// provider / model / apiKeyEnv はプロジェクト側の未指定時のフォールバック値として
+// 利用される(ProjectConfig の同名フィールドが優先される)。
 export interface ProfileConfig {
   OCR_USE_ANTHROPIC: string;
   OCR_LLM_URL: string;
@@ -33,6 +35,7 @@ export interface ProfileConfig {
   OCR_LLM_MODEL: string;
   provider?: string;
   model?: string;
+  apiKeyEnv?: string;
 }
 
 // 設定ファイル全体の構造。
@@ -95,22 +98,26 @@ const buildOptionalFlag = (name: string, value: string | undefined): string => {
 
 // projects(Record<string, ProjectConfig>) からコンテナ用 pi-resume シェル関数を生成。
 // 各 case では '--provider <p> --model <m> --thinking high --session <s>' の順で組み立てる。
-// provider / model は存在する場合のみ付与。
+// provider / model / apiKeyEnv は存在する場合のみ付与。プロファイル側から渡される
+// デフォルト値(defaultProvider / defaultModel / defaultApiKeyEnv)はプロジェクト側
+// で同名フィールドが未指定のときのフォールバックとして使われる。
 const generatePiResumeFunc = (
   projects: Record<string, ProjectConfig>,
   defaultProvider: string | undefined,
   defaultModel: string | undefined,
+  defaultApiKeyEnv: string | undefined,
 ): string => {
   const cases = Object.entries(projects)
     .map(([project, config]) => {
       // apiKeyEnv が指定されている場合のみ '--api-key "$<ENV>"' フラグを追加。
+      // プロジェクト側で未指定ならプロファイルのデフォルト値(defaultApiKeyEnv)を使う。
       // ダブルクォートで囲むのは値にスペース等が含まれる可能性に備えるため。
-      // テンプレートリテラル内 '$${config.apiKeyEnv}' は '$' + 補間値となり、
+      // テンプレートリテラル内 '$${...}' は '$' + 補間値となり、
       // 生成されるシェルでは $ENV がランタイムで展開される。
-      // (issue 仕様書にある '\\$${...}' はバックスラッシュが入ってしまい誤り)
+      const apiKeyEnv = config.apiKeyEnv ?? defaultApiKeyEnv;
       let apiKeyFlag = "";
-      if (config.apiKeyEnv) {
-        apiKeyFlag = `--api-key "$${config.apiKeyEnv}"`;
+      if (apiKeyEnv) {
+        apiKeyFlag = `--api-key "$${apiKeyEnv}"`;
       }
       // プロジェクト側で未指定の場合、プロファイルのデフォルト値をフォールバック
       const provider = config.provider ?? defaultProvider;
@@ -156,10 +163,11 @@ export const buildInitScript = (params: {
   projects: Record<string, ProjectConfig>;
   defaultProvider: string | undefined;
   defaultModel: string | undefined;
+  defaultApiKeyEnv?: string;
   bashMode?: boolean;
 }): string => {
-  const { projects, defaultProvider, defaultModel, bashMode = false } = params;
-  const piResumeFunc = generatePiResumeFunc(projects, defaultProvider, defaultModel);
+  const { projects, defaultProvider, defaultModel, defaultApiKeyEnv, bashMode = false } = params;
+  const piResumeFunc = generatePiResumeFunc(projects, defaultProvider, defaultModel, defaultApiKeyEnv);
 
   const commonScript = String.raw`cp -r /tmp/.ssh ~/.ssh && \
 chown -R $(id -u):$(id -g) ~/.ssh && \
@@ -305,7 +313,10 @@ const parseProfileOcrFields = (
   return { OCR_LLM_MODEL, OCR_LLM_TOKEN_KEY, OCR_LLM_URL, OCR_USE_ANTHROPIC };
 };
 
-// プロファイルのオプション(provider/model)を SAFE_SHELL_PATTERN で検証。
+// プロファイルのオプション(provider/model/apiKeyEnv)をそれぞれ適切な pattern で検証。
+// provider / model はシェル経由で参照する識別子なので SAFE_SHELL_PATTERN、
+// apiKeyEnv は POSIX 環境変数名として --api-key "$ENV" で参照するため SAFE_ENV_NAME_PATTERN
+// (ドット・ハイフンは不可) で検証する。
 const parseProfileOptionalFields = (params: {
   configPath: string;
   name: string;
@@ -319,6 +330,9 @@ const parseProfileOptionalFields = (params: {
   }
   if ("model" in profileObj) {
     result.model = requireSafeId({ configPath, fieldName: "model", key, pattern: SAFE_SHELL_PATTERN, rawValue: profileObj.model });
+  }
+  if ("apiKeyEnv" in profileObj) {
+    result.apiKeyEnv = requireSafeId({ configPath, fieldName: "apiKeyEnv", key, pattern: SAFE_ENV_NAME_PATTERN, rawValue: profileObj.apiKeyEnv });
   }
 };
 

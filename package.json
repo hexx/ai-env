@@ -9,7 +9,9 @@
   "scripts": {
     "start": "tsx index.ts",
     "build": "esbuild index.ts --bundle --platform=node --format=cjs --banner:js=\"#!/usr/bin/env node\" --outfile=dist/index.js",
-    "prepack": "npm run build"
+    "prepack": "npm run build",
+    "test": "node --import tsx --test pi-projects.test.ts",
+    "test:watch": "node --import tsx --test --watch pi-projects.test.ts"
   },
   "engines": {
     "node": ">=20"
