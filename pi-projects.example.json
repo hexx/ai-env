@@ -16,7 +16,10 @@
       "OCR_LLM_MODEL": "claude-3-5-sonnet-20241022",
       // デフォルトの provider/model (プロジェクト側で未指定の場合にフォールバック)
       "provider": "anthropic",
-      "model": "claude-3-5-sonnet-20241022"
+      "model": "claude-3-5-sonnet-20241022",
+      // デフォルトの apiKeyEnv (プロジェクト側で未指定の場合にフォールバック)。
+      // コンテナ内で '--api-key "$WORK_API_KEY"' として参照される環境変数名。
+      "apiKeyEnv": "WORK_API_KEY"
     }
   },
   // プロジェクトごとの pi セッション設定

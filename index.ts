@@ -258,6 +258,7 @@ const runContainerCommand = (ctx: RunContext): number => {
   const volumeArgs = buildVolumeArgs(ctx.home);
   const initScript = buildInitScript({
     bashMode: ctx.bashMode,
+    defaultApiKeyEnv: ctx.profile.apiKeyEnv,
     defaultModel: ctx.profile.model,
     defaultProvider: ctx.profile.provider,
     projects: ctx.projects,
