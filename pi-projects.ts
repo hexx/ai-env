@@ -125,7 +125,6 @@ const generatePiResumeFunc = (
       return `    ${project}) pi ${flags} ;;`;
     })
     .join("\n");
-  const available = Object.keys(projects).join(" ");
   return [
     "pi-resume() {",
     // 引数省略時は HOST_PROJECT_NAME 環境変数(= ホストの cwd ディレクトリ名)を
@@ -137,9 +136,8 @@ const generatePiResumeFunc = (
     '  local project="${1:-$HOST_PROJECT_NAME}"',
     '  case "$project" in',
     cases,
-    '    *) echo "Unknown project: $project" >&2',
-    `       echo "Available: ${available}" >&2`,
-    "       return 1 ;;",
+    '    *) echo "Warning: Unknown project - trying pi with defaults" >&2',
+    '       pi --thinking high --session "$project" ;;',
     "  esac",
     "}",
   ].join("\n");
