@@ -7,6 +7,7 @@
 
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import stripJsonComments from "strip-json-comments";
 
@@ -200,23 +201,7 @@ const readConfigContent = (configPath: string): string => {
       "code" in error &&
       error.code === "ENOENT"
     ) {
-      throw new Error(
-        `設定ファイル ${configPath} が見つかりません。\n` +
-          `以下の形式で JSON ファイルを作成し、profiles と projects を登録してください:\n` +
-          `{\n` +
-          `  "profiles": {\n` +
-          `    "pi-private": {\n` +
-          `      "OCR_USE_ANTHROPIC": "false",\n` +
-          `      "OCR_LLM_URL": "https://opencode.ai/zen/go/v1",\n` +
-          `      "OCR_LLM_TOKEN_KEY": "OPENCODE_API_KEY",\n` +
-          `      "OCR_LLM_MODEL": "mimo-v2.5-pro"\n` +
-          `    }\n` +
-          `  },\n` +
-          `  "projects": { ... }\n` +
-          `}\n` +
-          `リポジトリの pi-projects.example.json を参考にしてください。`,
-        { cause: error },
-      );
+      throw error;
     }
     throw error;
   }
@@ -438,14 +423,44 @@ const parseProjects = (
 // 旧形式(平らな project 形式)の場合はエラーメッセージで案内して中断。
 // ファイル不在・JSON 不正・構造不正はすべて例外を投げ、
 // main の try/catch で一貫してエラーメッセージ表示 + exit 1 する。
-export const loadAiEnvConfig = (): AiEnvConfig => {
-  const configPath = getAiEnvConfigPath();
-  const { profiles, projects } = toAiEnvConfigObject(
-    configPath,
-    parseConfigJson(configPath, readConfigContent(configPath)),
+// デフォルトの AiEnvConfig を生成する（設定ファイル未存在時用）。
+const getDefaultConfig = (): AiEnvConfig => {
+  console.error(
+    "pi-projects.json が見つからないため、デフォルト設定で起動します。\n" +
+      "後ほど pi-projects.example.json を参考に設定ファイルを作成してください。",
   );
   return {
-    profiles: parseProfiles(configPath, profiles),
-    projects: parseProjects(configPath, projects),
+    profiles: {
+      "pi-private": {
+        OCR_LLM_MODEL: "mimo-v2.5-pro",
+        OCR_LLM_TOKEN_KEY: "OPENCODE_API_KEY",
+        OCR_LLM_URL: "https://opencode.ai/zen/go/v1",
+        OCR_USE_ANTHROPIC: "false",
+      },
+    },
+    projects: {
+      "pi-private": {
+        session: randomUUID(),
+      },
+    },
   };
+};
+
+export const loadAiEnvConfig = (): AiEnvConfig => {
+  const configPath = getAiEnvConfigPath();
+  try {
+    const { profiles, projects } = toAiEnvConfigObject(
+      configPath,
+      parseConfigJson(configPath, readConfigContent(configPath)),
+    );
+    return {
+      profiles: parseProfiles(configPath, profiles),
+      projects: parseProjects(configPath, projects),
+    };
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      return getDefaultConfig();
+    }
+    throw error;
+  }
 };
