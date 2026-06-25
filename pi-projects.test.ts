@@ -254,4 +254,83 @@ describe("buildInitScript - apiKeyEnv フォールバック", () => {
     assert.ok(cases.some((line) => line.includes("task-manager")));
     assert.ok(!script.includes("--api-key"), "--api-key フラグは出力されない");
   });
+
+  it("プロジェクトの model にコロン区切り書式を指定できる(deepseek-v4-flash:xhigh)", async () => {
+    await withTempConfig(
+      {
+        profiles: {
+          "pi-work": {
+            OCR_USE_ANTHROPIC: "true",
+            OCR_LLM_URL: "https://api.anthropic.com/v1/messages",
+            OCR_LLM_TOKEN_KEY: "WORK_API_KEY",
+            OCR_LLM_MODEL: "claude-3-5-sonnet-20241022",
+          },
+        },
+        projects: {
+          "test-project": {
+            session: "019ec00f-6774-7719-9d32-0ce0acf7892f",
+            model: "deepseek-v4-flash:xhigh",
+          },
+        },
+      },
+      (configPath) => {
+        const config = loadAiEnvConfig();
+        assert.equal(config.projects["test-project"]?.model, "deepseek-v4-flash:xhigh");
+        ok(configPath.length > 0);
+      },
+    );
+  });
+
+  it("プロファイルの model にコロン区切り書式を指定できる", async () => {
+    await withTempConfig(
+      {
+        profiles: {
+          "pi-work": {
+            OCR_USE_ANTHROPIC: "true",
+            OCR_LLM_URL: "https://api.anthropic.com/v1/messages",
+            OCR_LLM_TOKEN_KEY: "WORK_API_KEY",
+            OCR_LLM_MODEL: "claude-3-5-sonnet-20241022",
+            model: "deepseek-v4-flash:xhigh",
+          },
+        },
+        projects: {
+          "test-project": {
+            session: "019ec00f-6774-7719-9d32-0ce0acf7892f",
+          },
+        },
+      },
+      (configPath) => {
+        const config = loadAiEnvConfig();
+        assert.equal(config.profiles["pi-work"]?.model, "deepseek-v4-flash:xhigh");
+        ok(configPath.length > 0);
+      },
+    );
+  });
+
+  it("プロジェクトの model に不正文字(シェルメタ文字)は引き続き拒否する", async () => {
+    await withTempConfig(
+      {
+        profiles: {
+          "pi-work": {
+            OCR_USE_ANTHROPIC: "true",
+            OCR_LLM_URL: "https://api.anthropic.com/v1/messages",
+            OCR_LLM_TOKEN_KEY: "WORK_API_KEY",
+            OCR_LLM_MODEL: "claude-3-5-sonnet-20241022",
+          },
+        },
+        projects: {
+          "test-project": {
+            session: "019ec00f-6774-7719-9d32-0ce0acf7892f",
+            model: "deepseek-v4-flash;rm -rf /",
+          },
+        },
+      },
+      () => {
+        assert.throws(
+          () => loadAiEnvConfig(),
+          /model/,
+        );
+      },
+    );
+  });
 });
