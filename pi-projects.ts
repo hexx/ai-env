@@ -97,10 +97,11 @@ const buildOptionalFlag = (name: string, value: string | undefined): string => {
 };
 
 // projects(Record<string, ProjectConfig>) からコンテナ用 pi-resume シェル関数を生成。
-// 各 case では '--provider <p> --model <m> --thinking high --session <s>' の順で組み立てる。
+// 各 case では '--provider <p> --model <m> --api-key "$<env>" --session <s>' の順で組み立てる。
 // provider / model / apiKeyEnv は存在する場合のみ付与。プロファイル側から渡される
 // デフォルト値(defaultProvider / defaultModel / defaultApiKeyEnv)はプロジェクト側
 // で同名フィールドが未指定のときのフォールバックとして使われる。
+// 思考レベルなどの pi 側オプションは明示的に渡さない(pi のデフォルトに委ねる)。
 const generatePiResumeFunc = (
   projects: Record<string, ProjectConfig>,
   defaultProvider: string | undefined,
@@ -126,7 +127,6 @@ const generatePiResumeFunc = (
         buildOptionalFlag("provider", provider),
         buildOptionalFlag("model", model),
         apiKeyFlag,
-        "--thinking high",
         `--session ${config.session}`,
       ].join(" ");
       return `    ${project}) pi ${flags} ;;`;
@@ -144,7 +144,7 @@ const generatePiResumeFunc = (
     '  case "$project" in',
     cases,
     '    *) echo "Warning: Unknown project - trying pi with defaults" >&2',
-    '       pi --thinking high ;;',
+    '       pi ;;',
     "  esac",
     "}",
   ].join("\n");
