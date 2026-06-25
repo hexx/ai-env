@@ -203,9 +203,13 @@ rc=$?
 pm2 kill
 exit $rc`;
   }
+  const defaultFlags = [
+    buildOptionalFlag("provider", defaultProvider),
+    buildOptionalFlag("model", defaultModel),
+  ].filter(Boolean).join(" ");
   return commonScript + String.raw`
 
-pi
+pi ${defaultFlags}
 rc=$?
 pm2 kill
 exit $rc`;
