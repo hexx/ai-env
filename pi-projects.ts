@@ -137,7 +137,7 @@ const generatePiResumeFunc = (
     '  case "$project" in',
     cases,
     '    *) echo "Warning: Unknown project - trying pi with defaults" >&2',
-    '       pi --thinking high --session "$project" ;;',
+    '       pi --thinking high ;;',
     "  esac",
     "}",
   ].join("\n");
