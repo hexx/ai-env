@@ -431,7 +431,7 @@ const getDefaultConfig = (): AiEnvConfig => {
   );
   return {
     profiles: {
-      "default": {
+      "pi-private": {
         OCR_LLM_MODEL: "mimo-v2.5-pro",
         OCR_LLM_TOKEN_KEY: "OPENCODE_API_KEY",
         OCR_LLM_URL: "https://opencode.ai/zen/go/v1",
@@ -439,7 +439,7 @@ const getDefaultConfig = (): AiEnvConfig => {
       },
     },
     projects: {
-      "default": {
+      "pi-private": {
         session: randomUUID(),
       },
     },
