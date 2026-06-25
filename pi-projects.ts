@@ -173,8 +173,9 @@ export const buildInitScript = (params: {
   defaultModel: string | undefined;
   defaultApiKeyEnv?: string;
   bashMode?: boolean;
+  resume?: boolean;
 }): string => {
-  const { projects, defaultProvider, defaultModel, defaultApiKeyEnv, bashMode = false } = params;
+  const { projects, defaultProvider, defaultModel, defaultApiKeyEnv, bashMode = false, resume = false } = params;
   const piResumeFunc = generatePiResumeFunc(projects, defaultProvider, defaultModel, defaultApiKeyEnv);
 
   const commonScript = String.raw`cp -r /tmp/.ssh ~/.ssh && \
@@ -193,10 +194,18 @@ PI_RESUME_EOF`;
 
 exec /bin/bash`;
   }
-  return commonScript + String.raw`
+  if (resume) {
+    return commonScript + String.raw`
 
 ${piResumeFunc}
 pi-resume
+rc=$?
+pm2 kill
+exit $rc`;
+  }
+  return commonScript + String.raw`
+
+pi
 rc=$?
 pm2 kill
 exit $rc`;

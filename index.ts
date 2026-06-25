@@ -238,6 +238,7 @@ const isMacOS = (): boolean => platform() === "darwin";
 // パラメータ数を抑えつつ、コンテキストを明示的に扱えるようにする。
 interface RunContext {
   bashMode: boolean;
+  resume: boolean;
   credentials: Credentials;
   herdrPaneId: string;
   home: string;
@@ -262,13 +263,14 @@ const runContainerCommand = (ctx: RunContext): number => {
     defaultModel: ctx.profile.model,
     defaultProvider: ctx.profile.provider,
     projects: ctx.projects,
+    resume: ctx.resume,
   });
   const containerArgs = buildContainerArgs(envArgs, volumeArgs, initScript);
   console.error(`$ container ${redactSecrets(containerArgs).join(" ")}`);
   return runContainer(containerArgs);
 };
 
-const prepareEnvironment = (bashMode: boolean): RunContext => {
+const prepareEnvironment = (bashMode: boolean, resume: boolean): RunContext => {
   const credentials = loadCredentials();
   const home = requireEnv("HOME");
   const herdrPaneId = requireEnv("HERDR_PANE_ID");
@@ -280,6 +282,7 @@ const prepareEnvironment = (bashMode: boolean): RunContext => {
   const profileName = detectProfileName(process.cwd(), aiEnvConfig.profiles);
   return {
     bashMode,
+    resume,
     credentials,
     herdrPaneId,
     home,
@@ -301,7 +304,7 @@ const handleError = (error: unknown): number => {
 
 // ===== メイン処理 =====
 
-const main = (bashMode: boolean): number => {
+const main = (bashMode: boolean, resume: boolean): number => {
   try {
     if (!isMacOS()) {
       console.error(
@@ -309,7 +312,7 @@ const main = (bashMode: boolean): number => {
       );
       return EXIT_ERROR;
     }
-    return runContainerCommand(prepareEnvironment(bashMode));
+    return runContainerCommand(prepareEnvironment(bashMode, resume));
   } catch (error) {
     return handleError(error);
   }
@@ -324,8 +327,9 @@ program
   .description("私専用のAI開発用Dockerサンドボックス環境を簡単に起動するCLI")
   .version("0.1.0")
   .option("--bash", "pi を起動せずに bash シェルのみを起動する")
-  .action((options: { bash?: boolean }) => {
-    process.exit(main(options.bash ?? false));
+  .option("--resume", "pi-projects.json のセッションを引き継いで起動する")
+  .action((options: { bash?: boolean; resume?: boolean }) => {
+    process.exit(main(options.bash ?? false, options.resume ?? false));
   });
 
 program.parse();
