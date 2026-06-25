@@ -87,7 +87,7 @@ container images | grep pi-sandbox
 ```
 
 * `profiles`: 仕事用 / プライベート用など用途別のプロファイル。各プロファイルに OCR 全体設定を記述。オプションで `provider` と `model` を指定でき、プロジェクト側で未指定の場合のデフォルト値として使用される。
-* `projects`: pi セッション再開用のプロジェクト定義。値は文字列(セッション ID のみ)とオブジェクト(`session` 必須、`provider` / `model` / `apiKeyEnv` 任意)の両方を受け付ける。オブジェクト形式では `pi-resume` 実行時に `--provider <p> --model <m> --api-key "$<env>" --thinking high --session <s>` の順で組み立てる(常に `--thinking high` 付与)。`apiKeyEnv` はコンテナ内の API キー用環境変数名(例: `LLM_API_KEY`)で、生成シェルでは `$LLM_API_KEY` としてランタイム展開される。
+* `projects`: pi セッション再開用のプロジェクト定義。値は文字列(セッション ID のみ)とオブジェクト(`session` 必須、`provider` / `model` / `apiKeyEnv` 任意)の両方を受け付ける。オブジェクト形式では `pi-resume` 実行時に `--provider <p> --model <m> --api-key "$<env>" --session <s>` の順で組み立てる。思考レベルなど pi 側のオプションは明示的に渡さず、`pi` コマンドのデフォルト挙動に委ねる。`apiKeyEnv` はコンテナ内の API キー用環境変数名(例: `LLM_API_KEY`)で、生成シェルでは `$LLM_API_KEY` としてランタイム展開される。
 * `OCR_LLM_TOKEN_KEY`: CREDENTIAL_SOURCES のキー名を指定。`credentials[OCR_LLM_TOKEN_KEY]` の値が `--env=OCR_LLM_TOKEN=...` に注入される。
 
 ### プロファイルの自動判別
