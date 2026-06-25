@@ -59,10 +59,18 @@ const errorMessage = (error: unknown): string => {
 const MIN_PROJECTS = 1;
 // プロファイル数の下限(0 件は不可)。
 const MIN_PROFILES = 1;
-// プロジェクト名 / セッション ID / provider / model などの「シェルを経由する
+// プロジェクト名 / セッション ID / provider などの「シェルを経由する
 // 値」に使う文字セット。bash case パターン(?, *, [, ])やコマンド置換
 // ($, `)等のシェルメタ文字を排除。URL には使えない。
+// model は model:thinkingLevel のコロン区切り書式を許容するため
+// 別途 SAFE_MODEL_PATTERN を使用する。
 const SAFE_SHELL_PATTERN = /^[a-zA-Z0-9._-]+$/u;
+
+// model 値に使う文字セット。
+// pi の --model フラグは model:thinkingLevel のコロン区切り書式を
+// サポートしているため、SAFE_SHELL_PATTERN にコロン(:) を追加。
+// シェル引数としてのコロンは特別な意味を持たず安全。
+const SAFE_MODEL_PATTERN = /^[a-zA-Z0-9._:-]+$/u;
 
 // POSIX 準拠のシェル環境変数名バリデーションパターン。
 // 英字またはアンダースコアで始まり、英数字とアンダースコアのみ。
@@ -86,8 +94,8 @@ const getAiEnvConfigPath = (): string =>
 // ===== 関数生成 =====
 
 // 任意の値から '--name <value>' フラグ文字列を生成(空文字なら空文字)。
-// 値は SAFE_SHELL_PATTERN で英数字・ハイフン・アンダースコア・ピリオドのみに
-// 制限済みなのでスペース区切り・非クォートで十分。シンプルに保たれる方を採用。
+// 値は SAFE_SHELL_PATTERN または SAFE_MODEL_PATTERN でシェルメタ文字を
+// 排除済みなのでスペース区切り・非クォートで十分。シンプルに保たれる方を採用。
 // no-ternary ルール下で三元演算子を避けるため関数化。
 const buildOptionalFlag = (name: string, value: string | undefined): string => {
   if (value) {
@@ -270,6 +278,7 @@ const toPlainObject = (
 // モジュールレベルの SAFE_SHELL_PATTERN / SAFE_ENV_PATTERN 定数を使う。
 const PATTERN_DESCRIPTIONS = new Map<RegExp, string>([
   [SAFE_SHELL_PATTERN, "英数字・ハイフン・アンダースコア・ピリオド"],
+  [SAFE_MODEL_PATTERN, "英数字・ハイフン・アンダースコア・ピリオド・コロン"],
   [SAFE_ENV_PATTERN, "英数字・ハイフン・アンダースコア・ピリオド・コロン・スラッシュ等(URL 用)"],
   [SAFE_ENV_NAME_PATTERN, "英字またはアンダースコア始まり + 英数字とアンダースコア(POSIX 環境変数名)"],
 ]);;
@@ -314,7 +323,8 @@ const parseProfileOcrFields = (
 };
 
 // プロファイルのオプション(provider/model/apiKeyEnv)をそれぞれ適切な pattern で検証。
-// provider / model はシェル経由で参照する識別子なので SAFE_SHELL_PATTERN、
+// provider はシェル経由で参照する識別子なので SAFE_SHELL_PATTERN、
+// model は model:thinkingLevel のコロン区切り書式を許容するため SAFE_MODEL_PATTERN、
 // apiKeyEnv は POSIX 環境変数名として --api-key "$ENV" で参照するため SAFE_ENV_NAME_PATTERN
 // (ドット・ハイフンは不可) で検証する。
 const parseProfileOptionalFields = (params: {
@@ -329,7 +339,7 @@ const parseProfileOptionalFields = (params: {
     result.provider = requireSafeId({ configPath, fieldName: "provider", key, pattern: SAFE_SHELL_PATTERN, rawValue: profileObj.provider });
   }
   if ("model" in profileObj) {
-    result.model = requireSafeId({ configPath, fieldName: "model", key, pattern: SAFE_SHELL_PATTERN, rawValue: profileObj.model });
+    result.model = requireSafeId({ configPath, fieldName: "model", key, pattern: SAFE_MODEL_PATTERN, rawValue: profileObj.model });
   }
   if ("apiKeyEnv" in profileObj) {
     result.apiKeyEnv = requireSafeId({ configPath, fieldName: "apiKeyEnv", key, pattern: SAFE_ENV_NAME_PATTERN, rawValue: profileObj.apiKeyEnv });
@@ -337,7 +347,7 @@ const parseProfileOptionalFields = (params: {
 };
 
 // 単一プロファイルをパース・検証。必須 4 フィールド(OCR_*)は SAFE_ENV_PATTERN、
-// オプション(provider/model)は SAFE_SHELL_PATTERN でバリデーション。
+// オプションの provider は SAFE_SHELL_PATTERN、model は SAFE_MODEL_PATTERN でバリデーション。
 const parseProfileEntry = (
   configPath: string,
   name: string,
@@ -387,7 +397,7 @@ const parseProjectObjectValue = (
     config.provider = requireSafeId({ configPath, fieldName: "provider", key, pattern: SAFE_SHELL_PATTERN, rawValue: obj.provider });
   }
   if ("model" in obj) {
-    config.model = requireSafeId({ configPath, fieldName: "model", key, pattern: SAFE_SHELL_PATTERN, rawValue: obj.model });
+    config.model = requireSafeId({ configPath, fieldName: "model", key, pattern: SAFE_MODEL_PATTERN, rawValue: obj.model });
   }
   if ("apiKeyEnv" in obj) {
     config.apiKeyEnv = requireSafeId({ configPath, fieldName: "apiKeyEnv", key, pattern: SAFE_ENV_NAME_PATTERN, rawValue: obj.apiKeyEnv });
