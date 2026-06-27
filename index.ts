@@ -6,6 +6,7 @@ import {
   type ProjectConfig,
   buildInitScript,
   loadAiEnvConfig,
+  validateCliOverrides,
 } from "./pi-projects";
 import { execFileSync, spawnSync } from "node:child_process";
 import { Command } from "commander";
@@ -237,7 +238,10 @@ const isMacOS = (): boolean => platform() === "darwin";
 // runContainer の引数をまとめて渡すための型。
 // パラメータ数を抑えつつ、コンテキストを明示的に扱えるようにする。
 interface RunContext {
+  apiKeyEnv: string | undefined;
   bashMode: boolean;
+  model: string | undefined;
+  provider: string | undefined;
   resume: boolean;
   credentials: Credentials;
   herdrPaneId: string;
@@ -259,6 +263,9 @@ const runContainerCommand = (ctx: RunContext): number => {
   const volumeArgs = buildVolumeArgs(ctx.home);
   const initScript = buildInitScript({
     bashMode: ctx.bashMode,
+    cliApiKeyEnv: ctx.apiKeyEnv,
+    cliModel: ctx.model,
+    cliProvider: ctx.provider,
     defaultApiKeyEnv: ctx.profile.apiKeyEnv,
     defaultModel: ctx.profile.model,
     defaultProvider: ctx.profile.provider,
@@ -270,7 +277,13 @@ const runContainerCommand = (ctx: RunContext): number => {
   return runContainer(containerArgs);
 };
 
-const prepareEnvironment = (bashMode: boolean, resume: boolean): RunContext => {
+const prepareEnvironment = (params: {
+  apiKeyEnv: string | undefined;
+  bashMode: boolean;
+  model: string | undefined;
+  provider: string | undefined;
+  resume: boolean;
+}): RunContext => {
   const credentials = loadCredentials();
   const home = requireEnv("HOME");
   const herdrPaneId = requireEnv("HERDR_PANE_ID");
@@ -281,8 +294,11 @@ const prepareEnvironment = (bashMode: boolean, resume: boolean): RunContext => {
   const aiEnvConfig: AiEnvConfig = loadAiEnvConfig();
   const profileName = detectProfileName(process.cwd(), aiEnvConfig.profiles);
   return {
-    bashMode,
-    resume,
+    apiKeyEnv: params.apiKeyEnv,
+    bashMode: params.bashMode,
+    model: params.model,
+    provider: params.provider,
+    resume: params.resume,
     credentials,
     herdrPaneId,
     home,
@@ -304,7 +320,15 @@ const handleError = (error: unknown): number => {
 
 // ===== メイン処理 =====
 
-const main = (bashMode: boolean, resume: boolean): number => {
+interface CliOptions {
+  apiKeyEnv?: string;
+  bash?: boolean;
+  model?: string;
+  provider?: string;
+  resume?: boolean;
+}
+
+const main = (options: CliOptions): number => {
   try {
     if (!isMacOS()) {
       console.error(
@@ -312,7 +336,22 @@ const main = (bashMode: boolean, resume: boolean): number => {
       );
       return EXIT_ERROR;
     }
-    return runContainerCommand(prepareEnvironment(bashMode, resume));
+    // CLI オプションを SAFE_*_PATTERN で検証(設定ファイルと同一ルールで弾く)。
+    // 検証エラーは handleError でメッセージ表示 + exit 1。
+    const validated = validateCliOverrides({
+      apiKeyEnv: options.apiKeyEnv,
+      model: options.model,
+      provider: options.provider,
+    });
+    return runContainerCommand(
+      prepareEnvironment({
+        apiKeyEnv: validated.apiKeyEnv,
+        bashMode: options.bash ?? false,
+        model: validated.model,
+        provider: validated.provider,
+        resume: options.resume ?? false,
+      }),
+    );
   } catch (error) {
     return handleError(error);
   }
@@ -328,8 +367,20 @@ program
   .version("0.1.0")
   .option("--bash", "pi を起動せずに bash シェルのみを起動する")
   .option("--resume", "pi-projects.json のセッションを引き継いで起動する")
-  .action((options: { bash?: boolean; resume?: boolean }) => {
-    process.exit(main(options.bash ?? false, options.resume ?? false));
+  .option(
+    "--provider <provider>",
+    "pi の --provider フラグに渡す値(bash モードでは PI_PROVIDER env 変数として export)",
+  )
+  .option(
+    "--model <model>",
+    "pi の --model フラグに渡す値(model:thinkingLevel 形式可、bash モードでは PI_MODEL env 変数として export)",
+  )
+  .option(
+    "--api-key-env <envName>",
+    "pi の --api-key で参照するコンテナ内環境変数名(例: LLM_API_KEY、bash モードでは PI_API_KEY_ENV として export)",
+  )
+  .action((options: CliOptions) => {
+    process.exit(main(options));
   });
 
 program.parse();
