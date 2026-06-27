@@ -11,13 +11,22 @@
 //    - プロジェクト側に apiKeyEnv あり → プロジェクト側の値を使用
 //    - プロジェクト側になし + プロファイル側に apiKeyEnv あり → プロファイル側の値を使用
 //    - どちらも未指定 → --api-key フラグを出力しない
+//  - デフォルト起動モード(--bash / --resume なし) で projects 内の provider / model / apiKeyEnv
+//    が反映されること(課題 #issue-202606280835 の主修正)
+//  - --bash モードで CLI オプション (--provider / --model / --api-key-env) が
+//    PI_PROVIDER / PI_MODEL / PI_API_KEY_ENV として export されること
+//  - validateCliOverrides による CLI オプションのバリデーション
 
 import { describe, it } from "node:test";
 import { ok, strict as assert } from "node:assert";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildInitScript, loadAiEnvConfig } from "./pi-projects";
+import {
+  buildInitScript,
+  loadAiEnvConfig,
+  validateCliOverrides,
+} from "./pi-projects";
 
 // ===== ヘルパー =====
 
@@ -331,6 +340,292 @@ describe("buildInitScript - apiKeyEnv フォールバック", () => {
           /model/,
         );
       },
+    );
+  });
+});
+
+// ===== デフォルト起動: プロジェクト設定の反映 =====
+//
+// 課題 #issue-202606280835 の主修正。ai-env を --resume / --bash なしで起動した時、
+// projects 内の provider / model / apiKeyEnv が反映されるべき。
+// デフォルト起動では pi-resume と同じ case 解決をインライン化するため、
+// テストでは case ベースのスクリプト出力を検証する。
+
+// デフォルト起動モード時のスクリプトを生成し、case 本体と project 解決ロジックを返す。
+// project="${HOST_PROJECT_NAME}" から始まる case ブロックの本体を切り出す。
+const extractDefaultCaseBody = (script: string): string => {
+  const match = script.match(
+    /project="\$\{HOST_PROJECT_NAME\}"\ncase "\$project" in\n([\s\S]*?)\nesac/,
+  );
+  if (!match) {
+    throw new Error("default case body が見つからない");
+  }
+  return match[1] ?? "";
+};
+
+// デフォルト起動時の指定プロジェクトの case 行(例: "    pi) pi ... ;;")を抽出する。
+const findDefaultCaseLine = (
+  script: string,
+  project: string,
+): string | undefined => {
+  const body = extractDefaultCaseBody(script);
+  const lines = body.split("\n");
+  return lines.find((line) => new RegExp(`^\\s+${project}\\) pi .*;;$`).test(line));
+};
+
+describe("buildInitScript - デフォルト起動でプロジェクト設定を反映", () => {
+  it("プロジェクト側の provider / model / apiKeyEnv が pi コマンドに渡る", () => {
+    const script = buildInitScript({
+      defaultApiKeyEnv: undefined,
+      defaultModel: undefined,
+      defaultProvider: undefined,
+      projects: {
+        pi: {
+          apiKeyEnv: "LLM_API_KEY",
+          model: "deepseek-v4-flash:xhigh",
+          provider: "opencode-go",
+          session: "019f0b62-a4db-75ad-af9f-d78d43604605",
+        },
+      },
+    });
+    const caseLine = findDefaultCaseLine(script, "pi");
+    assert.ok(caseLine, "pi の case 行が存在する");
+    assert.match(caseLine, /--provider opencode-go/);
+    assert.match(caseLine, /--model deepseek-v4-flash:xhigh/);
+    assert.match(caseLine, /--api-key "\$LLM_API_KEY"/);
+    assert.match(caseLine, /--session 019f0b62-a4db-75ad-af9f-d78d43604605/);
+  });
+
+  it("プロジェクト設定とプロフィールデフォルトが混在しても各プロジェクトのケースが正しく生成される", () => {
+    const script = buildInitScript({
+      defaultApiKeyEnv: "PROFILE_KEY",
+      defaultModel: "claude-3-5-sonnet-20241022",
+      defaultProvider: "anthropic",
+      projects: {
+        // プロジェクト側に明示 → プロジェクト側の値
+        "ai-env": {
+          apiKeyEnv: "PROJECT_KEY",
+          model: "minimax-m3",
+          provider: "opencode-go",
+          session: "019ec00f-6774-7719-9d32-0ce0acf7892f",
+        },
+        // プロジェクト側に未指定 → プロフィールデフォルト
+        "task-manager": {
+          session: "019ea76f-92d3-7442-a675-b79162e7f1c7",
+        },
+      },
+    });
+    const aiEnvLine = findDefaultCaseLine(script, "ai-env");
+    const taskLine = findDefaultCaseLine(script, "task-manager");
+    assert.ok(aiEnvLine && taskLine);
+    assert.match(aiEnvLine, /--provider opencode-go/);
+    assert.match(aiEnvLine, /--model minimax-m3/);
+    assert.match(aiEnvLine, /--api-key "\$PROJECT_KEY"/);
+    assert.match(taskLine, /--provider anthropic/);
+    assert.match(taskLine, /--model claude-3-5-sonnet-20241022/);
+    assert.match(taskLine, /--api-key "\$PROFILE_KEY"/);
+  });
+
+  it("projects が空でもシェルスクリプトとして成立する(*) 分岐で pi を起動)", () => {
+    const script = buildInitScript({
+      defaultApiKeyEnv: undefined,
+      defaultModel: undefined,
+      defaultProvider: undefined,
+      projects: {},
+    });
+    const body = extractDefaultCaseBody(script);
+    assert.match(body, /^\s*\*\) pi ;;$/m);
+  });
+
+  it("未知プロジェクト用 *) 分岐ではプロフィールデフォルトで pi を起動する", () => {
+    const script = buildInitScript({
+      defaultApiKeyEnv: "PROFILE_KEY",
+      defaultModel: "claude-3-5-sonnet-20241022",
+      defaultProvider: "anthropic",
+      projects: {
+        known: {
+          session: "019ea76f-92d3-7442-a675-b79162e7f1c7",
+        },
+      },
+    });
+    const body = extractDefaultCaseBody(script);
+    assert.match(body, /^\s*\*\) pi --provider anthropic --model claude-3-5-sonnet-20241022 ;;$/m);
+  });
+});
+
+// ===== CLI オーバーライド =====
+
+describe("buildInitScript - CLI オーバーライド (CLI > Project > Profile)", () => {
+  it("デフォルト起動で CLI の provider / model が未知プロジェクト用 *) 分岐で使われる", () => {
+    const script = buildInitScript({
+      cliModel: "claude-opus-4-7",
+      cliProvider: "anthropic",
+      defaultApiKeyEnv: undefined,
+      defaultModel: "claude-3-5-sonnet-20241022",
+      defaultProvider: "anthropic",
+      projects: {
+        known: {
+          session: "019ea76f-92d3-7442-a675-b79162e7f1c7",
+        },
+      },
+    });
+    const body = extractDefaultCaseBody(script);
+    assert.match(body, /^\s*\*\) pi --provider anthropic --model claude-opus-4-7 ;;$/m);
+  });
+
+  it("CLI の provider / model はプロジェクト case より優先される", () => {
+    const script = buildInitScript({
+      cliModel: "override-model",
+      cliProvider: "override-provider",
+      defaultApiKeyEnv: undefined,
+      defaultModel: undefined,
+      defaultProvider: undefined,
+      projects: {
+        pi: {
+          model: "original-model",
+          provider: "original-provider",
+          session: "019f0b62-a4db-75ad-af9f-d78d43604605",
+        },
+      },
+    });
+    const caseLine = findDefaultCaseLine(script, "pi");
+    assert.ok(caseLine);
+    assert.match(caseLine, /--provider override-provider/);
+    assert.match(caseLine, /--model override-model/);
+    assert.doesNotMatch(caseLine, /original-provider/);
+    assert.doesNotMatch(caseLine, /original-model/);
+  });
+
+  it("pi-resume 関数では *) 分岐に警告メッセージ+ pi (引数なし) を維持する", () => {
+    const script = buildInitScript({
+      cliModel: "override-model",
+      cliProvider: "override-provider",
+      defaultApiKeyEnv: undefined,
+      defaultModel: undefined,
+      defaultProvider: undefined,
+      projects: {},
+      resume: true,
+    });
+    // pi-resume 関数内の *) 分岐は警告 + pi (引数なし) を維持。
+    assert.match(script, /Warning: Unknown project - trying pi with defaults/);
+    // 関数の直後の呼び出しでは pi-resume を使う(デフォルト起動と区別)。
+    assert.match(script, /\npi-resume\n/);
+  });
+});
+
+// ===== --bash モードの CLI オーバーライド =====
+
+describe("buildInitScript - --bash モードで CLI オプションを env 変数として export", () => {
+  it("--provider を指定すると PI_PROVIDER として export される", () => {
+    const script = buildInitScript({
+      bashMode: true,
+      cliProvider: "opencode-go",
+      defaultApiKeyEnv: undefined,
+      defaultModel: undefined,
+      defaultProvider: undefined,
+      projects: {},
+    });
+    assert.match(script, /^export PI_PROVIDER="opencode-go"$/m);
+    assert.match(script, /\nexec \/bin\/bash$/m);
+  });
+
+  it("3 つの CLI オプション全て指定すると 3 つの env 変数として export される", () => {
+    const script = buildInitScript({
+      bashMode: true,
+      cliApiKeyEnv: "WORK_API_KEY",
+      cliModel: "deepseek-v4-flash:xhigh",
+      cliProvider: "opencode-go",
+      defaultApiKeyEnv: undefined,
+      defaultModel: undefined,
+      defaultProvider: undefined,
+      projects: {},
+    });
+    assert.match(script, /^export PI_PROVIDER="opencode-go"$/m);
+    assert.match(script, /^export PI_MODEL="deepseek-v4-flash:xhigh"$/m);
+    assert.match(script, /^export PI_API_KEY_ENV="WORK_API_KEY"$/m);
+  });
+
+  it("CLI オプションが何も指定されなければ export 行は出力されない", () => {
+    const script = buildInitScript({
+      bashMode: true,
+      defaultApiKeyEnv: undefined,
+      defaultModel: undefined,
+      defaultProvider: undefined,
+      projects: {},
+    });
+    assert.doesNotMatch(script, /^export PI_/m);
+    assert.match(script, /\nexec \/bin\/bash$/m);
+  });
+
+  it("--bash モードでも pi-resume 関数は .bashrc に注入される", () => {
+    const script = buildInitScript({
+      bashMode: true,
+      cliProvider: "opencode-go",
+      defaultApiKeyEnv: undefined,
+      defaultModel: undefined,
+      defaultProvider: undefined,
+      projects: {
+        pi: {
+          session: "019f0b62-a4db-75ad-af9f-d78d43604605",
+        },
+      },
+    });
+    // pi-resume 関数が bashrc に注入される。
+    assert.match(script, /pi-resume\(\) \{/);
+  });
+});
+
+// ===== validateCliOverrides =====
+
+describe("validateCliOverrides", () => {
+  it("全フィールド未指定なら空オブジェクトを返す", () => {
+    const result = validateCliOverrides({});
+    assert.deepEqual(result, {});
+  });
+
+  it("provider / model / apiKeyEnv いずれも指定すればそのまま返す", () => {
+    const result = validateCliOverrides({
+      apiKeyEnv: "WORK_API_KEY",
+      model: "deepseek-v4-flash:xhigh",
+      provider: "opencode-go",
+    });
+    assert.deepEqual(result, {
+      apiKeyEnv: "WORK_API_KEY",
+      model: "deepseek-v4-flash:xhigh",
+      provider: "opencode-go",
+    });
+  });
+
+  it("model にコロン区切り書式 (thinkingLevel) を許容する", () => {
+    const result = validateCliOverrides({ model: "deepseek-v4-flash:xhigh" });
+    assert.equal(result.model, "deepseek-v4-flash:xhigh");
+  });
+
+  it("provider にシェルメタ文字を含む値は拒否する", () => {
+    assert.throws(
+      () => validateCliOverrides({ provider: "opencode-go;rm -rf /" }),
+      /provider/,
+    );
+  });
+
+  it("model にシェルメタ文字を含む値は拒否する", () => {
+    assert.throws(
+      () => validateCliOverrides({ model: "deepseek-v4-flash$x" }),
+      /model/,
+    );
+  });
+
+  it("apiKeyEnv にドットを含む POSIX 違反の値は拒否する", () => {
+    assert.throws(
+      () => validateCliOverrides({ apiKeyEnv: "WORK.API.KEY" }),
+      /apiKeyEnv/,
+    );
+  });
+
+  it("空文字の apiKeyEnv は拒否する", () => {
+    assert.throws(
+      () => validateCliOverrides({ apiKeyEnv: "" }),
+      /apiKeyEnv/,
     );
   });
 });
