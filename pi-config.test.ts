@@ -2,7 +2,7 @@
 // pi-config.ts の挙動を Node.js 組み込みの node:test + node:assert で検証する。
 
 import { describe, it } from "node:test";
-import { ok, strict as assert } from "node:assert";
+import { strict as assert } from "node:assert";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -35,64 +35,6 @@ const withTempConfig = async (
     rmSync(dir, { recursive: true, force: true });
   }
 };
-
-// bash -n を使ってシェルスクリプトの構文チェックを行う。
-// 構文エラーがある場合は例外を送出する。
-const assertShellSyntax = (script: string): void => {
-  const { execSync } = require("node:child_process");
-  const tmpFile = join(tmpdir(), `pi-test-${Date.now()}.sh`);
-  writeFileSync(tmpFile, script);
-  try {
-    execSync(`bash -n "${tmpFile}"`, { encoding: "utf-8" });
-  } catch (err: unknown) {
-    const error = err as { stderr?: string; message?: string };
-    throw new Error(
-      `シェルスクリプトの構文エラー: ${error.stderr || error.message}`,
-    );
-  } finally {
-    rmSync(tmpFile, { force: true });
-  }
-};
-
-// awk を使って case ブロック内の行を抽出するヘルパー。
-// 正規表現パースに比べ、空白や改行の変更に対して耐性がある。
-const extractCaseLinesWithAwk = (
-  script: string,
-  startPattern: string,
-): string[] => {
-  const { execSync } = require("node:child_process");
-  // awk スクリプト: startPattern 以降の case ブロック内の行を抽出
-  // 注意: awk では \s が使えないため [[:space:]] を使う
-  const awkScript = `
-/${startPattern}/ { found=1; next }
-found && /^[[:space:]]+case / { in_case=1; next }
-found && in_case && /^[[:space:]]+esac/ { exit }
-found && in_case && /\) pi / { print }
-  `;
-  const tmpFile = join(tmpdir(), `pi-awk-${Date.now()}.sh`);
-  writeFileSync(tmpFile, script);
-  try {
-    const result = execSync(`awk '${awkScript}' "${tmpFile}"`, {
-      encoding: "utf-8",
-    });
-    return result
-      .split("\n")
-      .filter((line: string) => line.trim().length > 0);
-  } catch {
-    return [];
-  } finally {
-    rmSync(tmpFile, { force: true });
-  }
-};
-
-// buildInitScript の出力から pi-resume 関数部分だけを抽出して case 行の配列を返す。
-// awk を使って pi-resume() 関数定義以降の case ブロックから case 行を抽出する。
-// 正規表現パースに比べ、空白や改行の変更に対して耐性がある。
-const extractPiResumeCases = (script: string): string[] => {
-  return extractCaseLinesWithAwk(script, "^pi-resume\\(\\)");
-};
-
-
 
 // ===== テスト =====
 
