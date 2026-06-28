@@ -170,11 +170,11 @@ export const buildInitScript = (params: {
     cliApiKeyEnv,
   });
 
-  const commonScript = `cp -r /tmp/.ssh ~/.ssh && \
-chown -R $(id -u):$(id -g) ~/.ssh && \
-chmod 700 ~/.ssh && \
-find ~/.ssh -type f -exec chmod 600 {} \\; && \
-mkdir -p ~/.config/herdr && \
+  const commonScript = `cp -r /tmp/.ssh ~/.ssh && \\
+chown -R $(id -u):$(id -g) ~/.ssh && \\
+chmod 700 ~/.ssh && \\
+find ~/.ssh -type f -exec chmod 600 {} \\; && \\
+mkdir -p ~/.config/herdr && \\
 pm2 start socat --name "herdr-socat" -- UNIX-LISTEN:/home/pi/.config/herdr/herdr.sock,fork,reuseaddr TCP:${"$"}{HOST_IP}:9123
 
 cat << 'PI_RESUME_EOF' >> /home/pi/.bashrc
