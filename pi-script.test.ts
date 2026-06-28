@@ -2,7 +2,7 @@
 // pi-script.ts の挙動を Node.js 組み込みの node:test + node:assert で検証する。
 
 import { describe, it } from "node:test";
-import { ok, strict as assert } from "node:assert";
+import { strict as assert } from "node:assert";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -67,7 +67,7 @@ const extractCaseLinesWithAwk = (
 /${startPattern}/ { found=1; next }
 found && /^[[:space:]]+case / { in_case=1; next }
 found && in_case && /^[[:space:]]+esac/ { exit }
-found && in_case && /\) pi / { print }
+found && in_case && /) pi / { print }
   `;
   const tmpFile = join(tmpdir(), `pi-awk-${Date.now()}.sh`);
   writeFileSync(tmpFile, script);

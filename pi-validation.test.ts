@@ -2,7 +2,7 @@
 // pi-validation.ts の挙動を Node.js 組み込みの node:test + node:assert で検証する。
 
 import { describe, it } from "node:test";
-import { ok, strict as assert } from "node:assert";
+import { strict as assert } from "node:assert";
 import { validateCliOverrides } from "./pi-projects";
 
 // ===== テスト =====
