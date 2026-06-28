@@ -20,10 +20,11 @@ import { platform } from "node:os";
 export const EXIT_ERROR = 1;
 export const IMAGE_NAME = "pi-sandbox";
 
-// stderr にダンプする container コマンドの --env=KEY=VALUE のうち、
-// KEY が _API_KEY / _TOKEN で終わるものの VALUE を *** に置き換えるための正規表現。
-export const SECRET_ENV_PATTERN =
-  /^--env=(?<key>[A-Z0-9_]+(?:_API_KEY|_TOKEN))=.*$/u;
+// コンテナ内の固定パス。Dockerfile 上のレイアウトと密結合しているため、
+// 定数として抽出することで変更点を発見しやすくする。
+const CONTAINER_WORKSPACE = "/workspace";
+const CONTAINER_SSH = "/tmp/.ssh";
+const CONTAINER_PI_HOME = "/home/pi/.pi";
 
 // ===== 型 =====
 
@@ -33,13 +34,9 @@ export interface CredentialSource {
   name: string;
 }
 
-// Credentials 型を CREDENTIAL_SOURCES から導出。
-// CREDENTIAL_SOURCES に新エントリを追加すれば型も自動拡張されるため、
-// interface と配列の不整合による型漏れを構造的に防止できる。
-export type Credentials = Record<
-  (typeof CREDENTIAL_SOURCES)[number]["name"],
-  string
->;
+// execFileSync をテスト時にモックできるよう、依存性注入用の関数型を定義。
+// 3 つの関数(getHostIp / getCredential / loadCredentials)で共有する。
+type ExecFn = (file: string, args: string[], options: { encoding: "utf8" }) => string;
 
 // runContainer の引数をまとめて渡すための型。
 // パラメータ数を抑えつつ、コンテキストを明示的に扱えるようにする。
@@ -49,7 +46,7 @@ export interface RunContext {
   model: string | undefined;
   provider: string | undefined;
   resume: boolean;
-  credentials: Credentials;
+  credentials: PartialCredentials;
   herdrPaneId: string;
   home: string;
   hostIp: string;
@@ -94,6 +91,30 @@ export const CREDENTIAL_SOURCES: CredentialSource[] = [
   },
 ];
 
+// Credentials 型を CREDENTIAL_SOURCES から導出。
+// CREDENTIAL_SOURCES に新エントリを追加すれば型も自動拡張されるため、
+// interface と配列の不整合による型漏れを構造的に防止できる。
+export type Credentials = Record<
+  (typeof CREDENTIAL_SOURCES)[number]["name"],
+  string
+>;
+
+// ベストエフォート取得 / 部分的なテストを容易にするための型。
+// 必須キーが欠落する可能性を許容する。
+export type PartialCredentials = Partial<Credentials>;
+
+// stderr にダンプする container コマンドの --env=KEY=VALUE のうち、
+// KEY が CREDENTIAL_SOURCES のいずれかと一致するか、末尾が _API_KEY / _TOKEN
+// で終わるものの VALUE を *** に置き換えるための正規表現。
+// CREDENTIAL_SOURCES 由来 + サフィックス由来の二段構えにすることで、
+// 追加クレデンシャルを構造的にカバーしつつ OCR_LLM_TOKEN のような派生
+// シークレット変数もマスク対象に含める。
+const redactableNames = CREDENTIAL_SOURCES.map((s) => s.name).join("|");
+export const SECRET_ENV_PATTERN = new RegExp(
+  `^--env=(?<key>${redactableNames}|[A-Z0-9_]+(?:_API_KEY|_TOKEN))=.*$`,
+  "u",
+);
+
 // ===== ヘルパー関数 =====
 
 /**
@@ -104,9 +125,7 @@ export const CREDENTIAL_SOURCES: CredentialSource[] = [
  * `exec` はテスト容易性のために依存性注入できるようオプション引数化している。
  * デフォルトは `node:child_process` の `execFileSync`。
  */
-export const getHostIp = (
-  exec: (file: string, args: string[], options: { encoding: "utf8" }) => string = execFileSync,
-): string => {
+export const getHostIp = (exec: ExecFn = execFileSync as ExecFn): string => {
   try {
     return exec("ipconfig", ["getifaddr", "en0"], {
       encoding: "utf8",
@@ -135,7 +154,7 @@ export const getHostIp = (
 export const getCredential = (
   file: string,
   args: string[],
-  exec: (file: string, args: string[], options: { encoding: "utf8" }) => string = execFileSync,
+  exec: ExecFn = execFileSync as ExecFn,
 ): string => {
   try {
     return exec(file, args, {
@@ -174,7 +193,7 @@ export const detectProfileName = (
 };
 
 export const buildEnvArgs = (params: {
-  credentials: Credentials;
+  credentials: PartialCredentials;
   herdrPaneId: string;
   hostIp: string;
   hostProjectName: string;
@@ -182,6 +201,8 @@ export const buildEnvArgs = (params: {
 }): string[] => {
   // profile.OCR_LLM_TOKEN_KEY で指定されたクレデンシャルを取り出して OCR_LLM_TOKEN に注入。
   // 未定義なら明確なエラーで停止(undefined 文字列が注入されるのを防ぐ)。
+  // OCR_LLM_TOKEN_KEY はコード上は profile 側に存在するものとして扱われるため、
+  // 該当するクレデンシャルがロードされていなければエラー。
   const ocrToken = params.credentials[params.profile.OCR_LLM_TOKEN_KEY];
   if (!ocrToken) {
     throw new Error(
@@ -196,18 +217,18 @@ export const buildEnvArgs = (params: {
     `--env=OCR_LLM_URL=${params.profile.OCR_LLM_URL}`,
     `--env=OCR_LLM_TOKEN=${ocrToken}`,
     `--env=OCR_LLM_MODEL=${params.profile.OCR_LLM_MODEL}`,
-    `--env=XIAOMI_TOKEN_PLAN_SGP_API_KEY=${params.credentials.XIAOMI_TOKEN_PLAN_SGP_API_KEY}`,
-    `--env=OPENCODE_API_KEY=${params.credentials.OPENCODE_API_KEY}`,
-    `--env=OPENROUTER_API_KEY=${params.credentials.OPENROUTER_API_KEY}`,
-    `--env=LLM_API_KEY=${params.credentials.LLM_API_KEY}`,
-    `--env=GH_TOKEN=${params.credentials.GH_TOKEN}`,
+    `--env=XIAOMI_TOKEN_PLAN_SGP_API_KEY=${params.credentials.XIAOMI_TOKEN_PLAN_SGP_API_KEY ?? ""}`,
+    `--env=OPENCODE_API_KEY=${params.credentials.OPENCODE_API_KEY ?? ""}`,
+    `--env=OPENROUTER_API_KEY=${params.credentials.OPENROUTER_API_KEY ?? ""}`,
+    `--env=LLM_API_KEY=${params.credentials.LLM_API_KEY ?? ""}`,
+    `--env=GH_TOKEN=${params.credentials.GH_TOKEN ?? ""}`,
   ];
 };
 
 export const buildVolumeArgs = (home: string): string[] => [
-  `--volume=${process.cwd()}:/workspace`,
-  `--volume=${home}/.ssh:/tmp/.ssh:ro`,
-  `--volume=${home}/.pi:/home/pi/.pi`,
+  `--volume=${process.cwd()}:${CONTAINER_WORKSPACE}`,
+  `--volume=${home}/.ssh:${CONTAINER_SSH}:ro`,
+  `--volume=${home}/.pi:${CONTAINER_PI_HOME}`,
 ];
 
 export const buildContainerArgs = (
@@ -227,20 +248,23 @@ export const buildContainerArgs = (
   initScript,
 ];
 
-export const loadCredentials = (
-  exec: (file: string, args: string[], options: { encoding: "utf8" }) => string = execFileSync as (file: string, args: string[], options: { encoding: "utf8" }) => string,
-): Credentials => {
-  const credentials = {} as Record<string, string>;
+export const loadCredentials = (exec: ExecFn = execFileSync as ExecFn): PartialCredentials => {
+  const credentials: PartialCredentials = {};
   for (const { name, file, args } of CREDENTIAL_SOURCES) {
     const value = getCredential(file, args, exec);
     if (!value) {
-      throw new Error(
-        `クレデンシャル '${name}' の取得に失敗しました。macOS Keychain の登録状態 / 'gh auth login' の完了を確認してください。`,
+      // ベストエフォート: 未取得は警告にとどめ、コンテナ起動は継続する。
+      // profile.OCR_LLM_TOKEN_KEY がこのキーを参照している場合は buildEnvArgs 側で
+      // 個別にエラーになるため、ユーザーにどのクレデンシャルが欠落しているかを
+      // 明示できる。
+      console.error(
+        `警告: クレデンシャル '${name}' の取得に失敗しました。macOS Keychain の登録状態 / 'gh auth login' の完了を確認してください。`,
       );
+      continue;
     }
     credentials[name] = value;
   }
-  return credentials as Credentials;
+  return credentials;
 };
 
 // stderr に出力される container コマンドラインから、API キーやトークンに
