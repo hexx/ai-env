@@ -1,6 +1,6 @@
-# ベースイメージ: Node.js 22 LTS (Debian bookworm-slim)
-# Node 22 は Active LTS。再現性のためにメジャーバージョンを明示固定する。
-FROM node:22-bookworm-slim
+# ベースイメージ: Node.js 24 LTS (Debian trixie-slim)
+# Node 24 は Active LTS (2026-06 時点)。メジャーバージョンを明示固定して再現性を確保。
+FROM node:24-trixie-slim
 
 # Playwrightブラウザの共有インストールパスとデフォルトエディタの設定
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
