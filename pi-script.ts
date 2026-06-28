@@ -90,6 +90,10 @@ const buildPiFlags = (params: {
 // 各プロジェクトの case ブランチ、*) ブランチともに「CLI > Project > Profile」の優先度。
 // ただし *) ブランチでは project 値が存在しないため「CLI > profile」となる。
 // 思考レベルなど pi 側オプションは明示的に渡さない(pi のデフォルトに委ねる)。
+// sessionId は「セッションを引き継ぐ」シナリオ(--resume / pi-resume 関数経由)でのみ
+// --session フラグとして組み立てる。デフォルト起動(ai-env)では新しいセッションで
+// pi を立ち上げたいので sessionId は渡さない。includeSession は省略時 true で
+// 後方互換を維持(既存呼び出しは pi-resume 関数用途なので true で正しい)。
 export const generateCaseBody = (params: {
   projects: Record<string, ProjectConfig>;
   defaultProvider: string | undefined;
@@ -102,6 +106,11 @@ export const generateCaseBody = (params: {
   //   true:  警告メッセージ + pi (引数なし)。pi-resume 関数の既存挙動を保持。
   //   false: CLI > profile のフォールバック値で pi を起動。ai-env デフォルト起動用。
   warnOnUnknown: boolean;
+  // プロジェクト case で --session <id> を含めるかどうか。
+  //   true:  pi-resume 関数用。sessionId を引き継ぐ。
+  //   false: デフォルト起動用。sessionId は引き継がない(新しいセッションで pi を起動)。
+  // 省略時は true。
+  includeSession?: boolean;
 }): string => {
   const {
     projects,
@@ -112,15 +121,17 @@ export const generateCaseBody = (params: {
     cliModel,
     cliApiKeyEnv,
     warnOnUnknown,
+    includeSession = true,
   } = params;
   const projectCases = Object.entries(projects)
     .map(([project, config]) => {
       // 優先度: CLI > project > profile。CLI で明示上書きが可能。
+      // sessionId は includeSession が true のときだけ --session フラグに変換する。
       const flags = buildPiFlags({
         provider: cliProvider ?? config.provider ?? defaultProvider,
         model: cliModel ?? config.model ?? defaultModel,
         apiKeyEnv: cliApiKeyEnv ?? config.apiKeyEnv ?? defaultApiKeyEnv,
-        sessionId: config.session,
+        sessionId: includeSession ? config.session : undefined,
       });
       return `    ${project}) pi ${flags} ;;`;
     })
@@ -248,7 +259,8 @@ export const buildInitScript = (params: {
   }
   // デフォルト起動(--resume / --bash なし): pi-resume と同じ case 解決をインライン化。
   // プロジェクト側の provider / model / apiKeyEnv が反映され、未知プロジェクトでは
-  // CLI > profile のフォールバックで pi を起動する。
+  // CLI > profile のフォールバックで pi を起動する。sessionId は引き継がない
+  // (新しいセッションで pi を起動する)。セッションを再開したい場合は --resume を指定する。
   const caseBody = generateCaseBody({
     projects,
     defaultProvider,
@@ -257,6 +269,7 @@ export const buildInitScript = (params: {
     cliProvider,
     cliModel,
     cliApiKeyEnv,
+    includeSession: false,
     warnOnUnknown: false,
   });
   const template = loadTemplate("default-mode.sh.template");
