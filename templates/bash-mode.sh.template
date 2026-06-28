@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# bash モード用初期化スクリプト
+# 共通初期化 → CLI オプションを env 変数として export → bash 起動
+
+{{COMMON_SCRIPT}}
+{{EXPORT_BLOCK}}
+exec /bin/bash

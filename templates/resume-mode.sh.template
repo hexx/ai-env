@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# resume モード用初期化スクリプト
+# 共通初期化 → pi-resume 関数定義 → pi-resume 呼び出し → pm2 クリーンアップ
+
+{{COMMON_SCRIPT}}
+
+{{PI_RESUME_FUNC}}
+pi-resume
+rc=$?
+pm2 kill
+exit $rc
