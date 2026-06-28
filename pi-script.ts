@@ -3,6 +3,52 @@
 // pi-resume 関数や pi 起動スクリプトの文字列組み立てを担当する。
 
 import { type ProjectConfig } from "./pi-types";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+// ===== テンプレート読み込み =====
+
+// テンプレートファイルのキャッシュ（初回読み込み時にのみファイルアクセス）
+const templateCache = new Map<string, string>();
+
+// 正規表現の特殊文字をエスケープする。
+const escapeRegex = (s: string): string =>
+  s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// テンプレートファイルを読み込む。キャッシュ付き。
+const loadTemplate = (templateName: string): string => {
+  const cached = templateCache.get(templateName);
+  if (cached) {
+    return cached;
+  }
+  const templatePath = join(__dirname, "templates", templateName);
+  try {
+    const content = readFileSync(templatePath, "utf-8");
+    templateCache.set(templateName, content);
+    return content;
+  } catch (error) {
+    throw new Error(
+      `テンプレートファイル '${templateName}' の読み込みに失敗しました (${templatePath}): ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
+  }
+};
+
+// テンプレート内のプレースホルダーを置換する。
+// {{KEY}} 形式のプレースホルダーを values の対応する値で置換する。
+const renderTemplate = (
+  template: string,
+  values: Record<string, string>,
+): string => {
+  let result = template;
+  for (const [key, value] of Object.entries(values)) {
+    result = result.replace(
+      new RegExp(`\\{\\{${escapeRegex(key)}\\}\\}`, "g"),
+      value,
+    );
+  }
+  return result;
+};
 
 // ===== ヘルパー =====
 
@@ -117,20 +163,19 @@ export const generatePiResumeFunc = (params: {
   cliApiKeyEnv: string | undefined;
 }): string => {
   const caseBody = generateCaseBody({ ...params, warnOnUnknown: true });
-  return [
-    "pi-resume() {",
-    // 引数省略時は HOST_PROJECT_NAME 環境変数(= ホストの cwd ディレクトリ名)を
-    // プロジェクト名として自動採用。コンテナ内の $PWD は常に /workspace なので
-    // $(basename "$PWD") では 'workspace' 固定になり機能しないため、ホスト側で
-    // 算出した値を環境変数経由で受け取る。
-    // 通常文字列内に bash の ${1:-...} を含むため oxlint ルールを部分抑止。
-    // oxlint-disable-next-line no-template-curly-in-string
-    '  local project="${1:-$HOST_PROJECT_NAME}"',
-    '  case "$project" in',
-    caseBody,
-    "  esac",
-    "}",
-  ].join("\n");
+  const template = loadTemplate("pi-resume.sh.template");
+  return renderTemplate(template, {
+    CASE_BODY: caseBody,
+  });
+};
+
+// 共通初期化スクリプトを生成する。
+// テンプレートファイルから読み込み、pi-resume 関数を注入する。
+const generateCommonScript = (piResumeFunc: string): string => {
+  const template = loadTemplate("common.sh.template");
+  return renderTemplate(template, {
+    PI_RESUME_FUNC: piResumeFunc,
+  });
 };
 
 // コンテナ起動直後にコンテナ内で実行する初期化スクリプトを生成。
@@ -170,16 +215,7 @@ export const buildInitScript = (params: {
     cliApiKeyEnv,
   });
 
-  const commonScript = `cp -r /tmp/.ssh ~/.ssh && \\
-chown -R $(id -u):$(id -g) ~/.ssh && \\
-chmod 700 ~/.ssh && \\
-find ~/.ssh -type f -exec chmod 600 {} \\; && \\
-mkdir -p ~/.config/herdr && \\
-pm2 start socat --name "herdr-socat" -- UNIX-LISTEN:/home/pi/.config/herdr/herdr.sock,fork,reuseaddr TCP:${"$"}{HOST_IP}:9123
-
-cat << 'PI_RESUME_EOF' >> /home/pi/.bashrc
-${piResumeFunc}
-PI_RESUME_EOF`;
+  const commonScript = generateCommonScript(piResumeFunc);
 
   if (bashMode) {
     // CLI オプションが指定された場合のみ env 変数として export。
@@ -197,18 +233,18 @@ PI_RESUME_EOF`;
     }
     const exportBlock =
       exportLines.length > 0 ? `\n${exportLines.join("\n")}\n` : "";
-    return commonScript + exportBlock + `
-
-exec /bin/bash`;
+    const template = loadTemplate("bash-mode.sh.template");
+    return renderTemplate(template, {
+      COMMON_SCRIPT: commonScript,
+      EXPORT_BLOCK: exportBlock,
+    });
   }
   if (resume) {
-    return commonScript + `
-
-${piResumeFunc}
-pi-resume
-rc=$?
-pm2 kill
-exit $rc`;
+    const template = loadTemplate("resume-mode.sh.template");
+    return renderTemplate(template, {
+      COMMON_SCRIPT: commonScript,
+      PI_RESUME_FUNC: piResumeFunc,
+    });
   }
   // デフォルト起動(--resume / --bash なし): pi-resume と同じ case 解決をインライン化。
   // プロジェクト側の provider / model / apiKeyEnv が反映され、未知プロジェクトでは
@@ -223,13 +259,9 @@ exit $rc`;
     cliApiKeyEnv,
     warnOnUnknown: false,
   });
-  return commonScript + `
-
-project="${"$"}{HOST_PROJECT_NAME}"
-case "$project" in
-${caseBody}
-esac
-rc=$?
-pm2 kill
-exit $rc`;
+  const template = loadTemplate("default-mode.sh.template");
+  return renderTemplate(template, {
+    COMMON_SCRIPT: commonScript,
+    CASE_BODY: caseBody,
+  });
 };

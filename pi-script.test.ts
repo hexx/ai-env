@@ -273,8 +273,9 @@ const extractDefaultCaseBody = (script: string): string => {
   writeFileSync(tmpFile, script);
   try {
     // awk で2番目の case ブロックを切り出す（1番目は pi-resume 関数内）
+    // コメント行（# で始まる行）は除外する
     const result = execSync(
-      `awk 'BEGIN { count=0 } /case/ { count++; if (count == 2) { in_case=1; next } } in_case && /esac/ { exit } in_case { print }' "${tmpFile}"`,
+      `awk 'BEGIN { count=0 } /^[[:space:]]*case / { count++; if (count == 2) { in_case=1; next } } in_case && /esac/ { exit } in_case { print }' "${tmpFile}"`,
       { encoding: "utf-8" }
     );
     const body = result.trim();

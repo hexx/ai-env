@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# デフォルト起動モード用初期化スクリプト
+# 共通初期化 → プロジェクト名で case 解決 → pm2 クリーンアップ
+
+{{COMMON_SCRIPT}}
+
+project="${HOST_PROJECT_NAME}"
+case "$project" in
+{{CASE_BODY}}
+esac
+rc=$?
+pm2 kill
+exit $rc
