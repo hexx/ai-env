@@ -136,18 +136,6 @@ export const generatePiResumeFunc = (params: {
 // コンテナ起動直後にコンテナ内で実行する初期化スクリプトを生成。
 // SSH 鍵セットアップ → pm2 管理下の socat ブリッジ → pi-resume 関数定義 → pi 起動の順。
 // pi 終了時に pm2 をクリーンアップしてコンテナを終了する。
-// bash で $HOST_IP を変数展開するための参照文字列を返す。
-// String.raw 内で '${HOST_IP}' を直接書くと TypeScript テンプレート式として
-// 解釈されるため、ヘルパー関数を経由して文字列として埋め込む。
-// oxlint-disable-next-line no-template-curly-in-string
-const hostIpRef = (): string => "${HOST_IP}";
-
-// bash で $HOST_PROJECT_NAME を変数展開するための参照文字列を返す。
-// hostIpRef と同じく、String.raw 内で TypeScript テンプレート式として
-// 解釈されないようヘルパー関数経由で文字列を埋め込む。
-// oxlint-disable-next-line no-template-curly-in-string
-const hostProjectNameRef = (): string => "${HOST_PROJECT_NAME}";
-
 export const buildInitScript = (params: {
   projects: Record<string, ProjectConfig>;
   defaultProvider: string | undefined;
@@ -182,12 +170,12 @@ export const buildInitScript = (params: {
     cliApiKeyEnv,
   });
 
-  const commonScript = String.raw`cp -r /tmp/.ssh ~/.ssh && \
+  const commonScript = `cp -r /tmp/.ssh ~/.ssh && \
 chown -R $(id -u):$(id -g) ~/.ssh && \
 chmod 700 ~/.ssh && \
-find ~/.ssh -type f -exec chmod 600 {} \; && \
+find ~/.ssh -type f -exec chmod 600 {} \\; && \
 mkdir -p ~/.config/herdr && \
-pm2 start socat --name "herdr-socat" -- UNIX-LISTEN:/home/pi/.config/herdr/herdr.sock,fork,reuseaddr TCP:${hostIpRef()}:9123
+pm2 start socat --name "herdr-socat" -- UNIX-LISTEN:/home/pi/.config/herdr/herdr.sock,fork,reuseaddr TCP:${"$"}{HOST_IP}:9123
 
 cat << 'PI_RESUME_EOF' >> /home/pi/.bashrc
 ${piResumeFunc}
@@ -209,12 +197,12 @@ PI_RESUME_EOF`;
     }
     const exportBlock =
       exportLines.length > 0 ? `\n${exportLines.join("\n")}\n` : "";
-    return commonScript + exportBlock + String.raw`
+    return commonScript + exportBlock + `
 
 exec /bin/bash`;
   }
   if (resume) {
-    return commonScript + String.raw`
+    return commonScript + `
 
 ${piResumeFunc}
 pi-resume
@@ -235,9 +223,9 @@ exit $rc`;
     cliApiKeyEnv,
     warnOnUnknown: false,
   });
-  return commonScript + String.raw`
+  return commonScript + `
 
-project="${hostProjectNameRef()}"
+project="${"$"}{HOST_PROJECT_NAME}"
 case "$project" in
 ${caseBody}
 esac
