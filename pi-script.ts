@@ -11,6 +11,10 @@ import { join } from "node:path";
 // テンプレートファイルのキャッシュ（初回読み込み時にのみファイルアクセス）
 const templateCache = new Map<string, string>();
 
+// 正規表現の特殊文字をエスケープする。
+const escapeRegex = (s: string): string =>
+  s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 // テンプレートファイルを読み込む。キャッシュ付き。
 const loadTemplate = (templateName: string): string => {
   const cached = templateCache.get(templateName);
@@ -18,9 +22,16 @@ const loadTemplate = (templateName: string): string => {
     return cached;
   }
   const templatePath = join(__dirname, "templates", templateName);
-  const content = readFileSync(templatePath, "utf-8");
-  templateCache.set(templateName, content);
-  return content;
+  try {
+    const content = readFileSync(templatePath, "utf-8");
+    templateCache.set(templateName, content);
+    return content;
+  } catch (error) {
+    throw new Error(
+      `テンプレートファイル '${templateName}' の読み込みに失敗しました (${templatePath}): ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
+  }
 };
 
 // テンプレート内のプレースホルダーを置換する。
@@ -31,7 +42,10 @@ const renderTemplate = (
 ): string => {
   let result = template;
   for (const [key, value] of Object.entries(values)) {
-    result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), value);
+    result = result.replace(
+      new RegExp(`\\{\\{${escapeRegex(key)}\\}\\}`, "g"),
+      value,
+    );
   }
   return result;
 };
