@@ -32,21 +32,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # 2. 開発ツール・ライブラリのセットアップ
 # =========================================================
 # 必須npmパッケージのグローバルインストール。
-# バージョンを明示固定し、ビルドの再現性を確保する。
-# 最新版を取得したい場合は Dockerfile を更新するか、--build-arg で
-# バージョン文字列を上書きする運用が考えられる。
-# - pi-coding-agent / open-code-review は個人開発パッケージで
-#   バージョンタグの運用方針が未確定のため @latest のままとする
-#   (Issue #202606280659 の対応時の妥協点)
+# いずれも @latest を指定し、ビルドごとに最新版を取得する。
+# - pi-coding-agent / open-code-review は個人開発パッケージ
+# - playwright はバージョン固定すると依存解決の兼ね合いでビルドが
+#   失敗する場合があるため @latest
 # - pm2 は herdr-socat プロセスの管理に使用
 # - --no-cache でレイヤにnpmキャッシュを残さない(イメージサイズ削減)
-ARG PLAYWRIGHT_VERSION=1.50.0
-ARG PM2_VERSION=5.4.3
 RUN npm install -g --no-cache \
-        playwright@${PLAYWRIGHT_VERSION} \
+        playwright@latest \
         @earendil-works/pi-coding-agent@latest \
         @alibaba-group/open-code-review@latest \
-        pm2@${PM2_VERSION}
+        pm2@latest
 
 # Playwrightブラウザ本体と依存ライブラリのインストール。
 # パーミッションは 755 とし、pi ユーザーがブラウザバイナリを実行できるが
