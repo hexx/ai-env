@@ -304,7 +304,8 @@ const prepareEnvironment = (params: {
     home,
     hostIp: getHostIp(),
     hostProjectName,
-    profile: aiEnvConfig.profiles[profileName],
+    // detectProfileName が profiles 内の存在を保証しているため non-null assertion を使用
+    profile: aiEnvConfig.profiles[profileName]!,
     projects: aiEnvConfig.projects,
   };
 };
