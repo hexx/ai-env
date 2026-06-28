@@ -1,5 +1,6 @@
-# ベースイメージ: Node.js 24 (Debian trixie-slim)
-FROM node:24-trixie-slim
+# ベースイメージ: Node.js 22 LTS (Debian bookworm-slim)
+# Node 22 は Active LTS。再現性のためにメジャーバージョンを明示固定する。
+FROM node:22-bookworm-slim
 
 # Playwrightブラウザの共有インストールパスとデフォルトエディタの設定
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
@@ -30,18 +31,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # =========================================================
 # 2. 開発ツール・ライブラリのセットアップ
 # =========================================================
-# 必須npmパッケージのグローバルインストール
-# - playwright は @latest を指定
-#   (バージョン固定すると依存解決の兼ね合いでビルドが失敗する場合があるため)
-# - pi-coding-agent / open-code-review は @latest を意図的に指定し、
-#   ビルドごとに最新版を取得
+# 必須npmパッケージのグローバルインストール。
+# バージョンを明示固定し、ビルドの再現性を確保する。
+# 最新版を取得したい場合は Dockerfile を更新するか、--build-arg で
+# バージョン文字列を上書きする運用が考えられる。
+# - pi-coding-agent / open-code-review は個人開発パッケージで
+#   バージョンタグの運用方針が未確定のため @latest のままとする
+#   (Issue #202606280659 の対応時の妥協点)
 # - pm2 は herdr-socat プロセスの管理に使用
 # - --no-cache でレイヤにnpmキャッシュを残さない(イメージサイズ削減)
+ARG PLAYWRIGHT_VERSION=1.50.0
+ARG PM2_VERSION=5.4.3
 RUN npm install -g --no-cache \
-        playwright@latest \
+        playwright@${PLAYWRIGHT_VERSION} \
         @earendil-works/pi-coding-agent@latest \
         @alibaba-group/open-code-review@latest \
-        pm2@latest
+        pm2@${PM2_VERSION}
 
 # Playwrightブラウザ本体と依存ライブラリのインストール。
 # パーミッションは 755 とし、pi ユーザーがブラウザバイナリを実行できるが
@@ -57,12 +62,11 @@ RUN groupadd -r pi && useradd -r -m -g pi pi
 
 WORKDIR /workspace
 
-# pi-coding-agent を最新状態へアップデート
-# root 権限で実行(pi ユーザー作成後に USER pi で権限を落とす前に実行)
-# ENV CACHE の値を変更すると、Docker レイヤーキャッシュがバスティングされ
-# この行以降のレイヤー(含む RUN pi update --all)が再実行される。
-# pi update --all を再実行したい場合は、CACHE の値を任意の文字列に変更する。
-ENV CACHE="20260623"
+# pi-coding-agent を最新状態へアップデート。
+# ARG CACHEBUST を変更するとこの行以降のレイヤーが再実行される。
+# (ENV ではなく ARG を使うことで、コンテナ内に環境変数が残らない)
+# 例: docker build --build-arg CACHEBUST=$(date +%s) .
+ARG CACHEBUST=1
 RUN pi update --all
 
 USER pi
