@@ -53,9 +53,9 @@ export const generateCaseBody = (params: {
   cliModel: string | undefined;
   cliApiKeyEnv: string | undefined;
   // *) ブランチの挙動。
-  //   "warn": 警告メッセージ + pi (引数なし)。pi-resume 関数の既存挙動を保持。
-  //   "defaults": CLI > profile のフォールバック値で pi を起動。ai-env デフォルト起動用。
-  unknownStrategy: "warn" | "defaults";
+  //   true:  警告メッセージ + pi (引数なし)。pi-resume 関数の既存挙動を保持。
+  //   false: CLI > profile のフォールバック値で pi を起動。ai-env デフォルト起動用。
+  warnOnUnknown: boolean;
 }): string => {
   const {
     projects,
@@ -65,7 +65,7 @@ export const generateCaseBody = (params: {
     cliProvider,
     cliModel,
     cliApiKeyEnv,
-    unknownStrategy,
+    warnOnUnknown,
   } = params;
   const projectCases = Object.entries(projects)
     .map(([project, config]) => {
@@ -80,7 +80,7 @@ export const generateCaseBody = (params: {
     })
     .join("\n");
   let unknownBranch: string;
-  if (unknownStrategy === "warn") {
+  if (warnOnUnknown) {
     unknownBranch = [
       '    *) echo "Warning: Unknown project - trying pi with defaults" >&2',
       "       pi ;;",
@@ -116,7 +116,7 @@ export const generatePiResumeFunc = (params: {
   cliModel: string | undefined;
   cliApiKeyEnv: string | undefined;
 }): string => {
-  const caseBody = generateCaseBody({ ...params, unknownStrategy: "warn" });
+  const caseBody = generateCaseBody({ ...params, warnOnUnknown: true });
   return [
     "pi-resume() {",
     // 引数省略時は HOST_PROJECT_NAME 環境変数(= ホストの cwd ディレクトリ名)を
@@ -233,7 +233,7 @@ exit $rc`;
     cliProvider,
     cliModel,
     cliApiKeyEnv,
-    unknownStrategy: "defaults",
+    warnOnUnknown: false,
   });
   return commonScript + String.raw`
 

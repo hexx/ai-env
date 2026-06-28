@@ -30,19 +30,19 @@ import {
 // pi セッション再開設定(JSON)のファイルパス。
 // 環境変数 AI_ENV_PI_PROJECTS で上書き可能(テストやカスタム配置用)。
 // 関数化しているのは、テスト時に env を切り替えられるよう評価を実行時に行うため。
-const getAiEnvConfigPath = (): string =>
+export const getAiEnvConfigPath = (): string =>
   process.env.AI_ENV_PI_PROJECTS ??
   join(homedir(), ".config", "ai-env", "pi-projects.json");
 
 // ===== 設定ファイル読み込み =====
 
 // 設定ファイルの読み込み。ENOENT は呼び出し元でハンドリングする。
-const readConfigContent = (configPath: string): string =>
+export const readConfigContent = (configPath: string): string =>
   readFileSync(configPath, "utf8");
 
 // JSONC (JSON with Comments) パースを実行。
 // コメントを除去した後に JSON.parse を実行し、失敗時はファイル名と原因を含めて再 throw。
-const parseConfigJson = (configPath: string, content: string): unknown => {
+export const parseConfigJson = (configPath: string, content: string): unknown => {
   try {
     const stripped = stripJsonComments(content);
     return JSON.parse(stripped);
@@ -56,7 +56,7 @@ const parseConfigJson = (configPath: string, content: string): unknown => {
 
 // パース済みの unknown 値が AiEnvConfig の最上位構造を持つことを検証。
 // 旧形式(平らに project=session 形式)の場合は新構造の案内を出して中断。
-const toAiEnvConfigObject = (
+export const toAiEnvConfigObject = (
   configPath: string,
   parsed: unknown,
 ): { profiles: unknown; projects: unknown } => {
@@ -80,7 +80,7 @@ const toAiEnvConfigObject = (
 // ===== プロファイルパース =====
 
 // プロファイルの必須 OCR フィールド 4 つを SAFE_ENV_PATTERN で検証。
-const parseProfileOcrFields = (
+export const parseProfileOcrFields = (
   configPath: string,
   name: string,
   profileObj: Record<string, unknown>,
@@ -119,7 +119,7 @@ const parseProfileOptionalFields = (params: {
 
 // 単一プロファイルをパース・検証。必須 4 フィールド(OCR_*)は SAFE_ENV_PATTERN、
 // オプションの provider は SAFE_SHELL_PATTERN、model は SAFE_MODEL_PATTERN でバリデーション。
-const parseProfileEntry = (
+export const parseProfileEntry = (
   configPath: string,
   name: string,
   raw: unknown,
@@ -149,7 +149,7 @@ const parseProfiles = (
 // ===== プロジェクトパース =====
 
 // オブジェクト形式の value から ProjectConfig を組み立てる。
-const parseProjectObjectValue = (
+export const parseProjectObjectValue = (
   configPath: string,
   key: string,
   obj: Record<string, unknown>,
@@ -170,7 +170,7 @@ const parseProjectObjectValue = (
 };
 
 // 単一の (key, value) エントリを ProjectConfig に変換。文字列とオブジェクトの両対応。
-const parseProjectEntry = (
+export const parseProjectEntry = (
   configPath: string,
   key: string,
   value: unknown,
@@ -206,7 +206,7 @@ const parseProjects = (
 };
 
 // デフォルトの AiEnvConfig を生成する（設定ファイル未存在時用）。
-const getDefaultConfig = (): AiEnvConfig => {
+export const getDefaultConfig = (): AiEnvConfig => {
   console.error(
     "pi-projects.json が見つからないため、デフォルト設定で起動します。\n" +
       "後ほど pi-projects.example.json を参考に設定ファイルを作成してください。",

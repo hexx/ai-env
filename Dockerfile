@@ -1,4 +1,5 @@
-# ベースイメージ: Node.js 24 (Debian trixie-slim)
+# ベースイメージ: Node.js 24 LTS (Debian trixie-slim)
+# Node 24 は Active LTS (2026-06 時点)。メジャーバージョンを明示固定して再現性を確保。
 FROM node:24-trixie-slim
 
 # Playwrightブラウザの共有インストールパスとデフォルトエディタの設定
@@ -30,11 +31,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # =========================================================
 # 2. 開発ツール・ライブラリのセットアップ
 # =========================================================
-# 必須npmパッケージのグローバルインストール
-# - playwright は @latest を指定
-#   (バージョン固定すると依存解決の兼ね合いでビルドが失敗する場合があるため)
-# - pi-coding-agent / open-code-review は @latest を意図的に指定し、
-#   ビルドごとに最新版を取得
+# 必須npmパッケージのグローバルインストール。
+# いずれも @latest を指定し、ビルドごとに最新版を取得する。
+# - pi-coding-agent / open-code-review は個人開発パッケージ
+# - playwright はバージョン固定すると依存解決の兼ね合いでビルドが
+#   失敗する場合があるため @latest
 # - pm2 は herdr-socat プロセスの管理に使用
 # - --no-cache でレイヤにnpmキャッシュを残さない(イメージサイズ削減)
 RUN npm install -g --no-cache \
@@ -57,12 +58,11 @@ RUN groupadd -r pi && useradd -r -m -g pi pi
 
 WORKDIR /workspace
 
-# pi-coding-agent を最新状態へアップデート
-# root 権限で実行(pi ユーザー作成後に USER pi で権限を落とす前に実行)
-# ENV CACHE の値を変更すると、Docker レイヤーキャッシュがバスティングされ
-# この行以降のレイヤー(含む RUN pi update --all)が再実行される。
-# pi update --all を再実行したい場合は、CACHE の値を任意の文字列に変更する。
-ENV CACHE="20260623"
+# pi-coding-agent を最新状態へアップデート。
+# ARG CACHEBUST を変更するとこの行以降のレイヤーが再実行される。
+# (ENV ではなく ARG を使うことで、コンテナ内に環境変数が残らない)
+# 例: docker build --build-arg CACHEBUST=$(date +%s) .
+ARG CACHEBUST=1
 RUN pi update --all
 
 USER pi
