@@ -20,9 +20,12 @@ import {
   CREDENTIAL_SOURCES,
   IMAGE_NAME,
   SECRET_ENV_PATTERN,
+  buildAttachArgs,
   buildContainerArgs,
+  buildContainerName,
   buildEnvArgs,
   buildVolumeArgs,
+  findContainerByLabel,
   detectProfileName,
   getCredential,
   getHostIp,
@@ -243,6 +246,46 @@ describe("buildEnvArgs", () => {
   });
 });
 
+// ===== buildContainerName =====
+
+describe("buildContainerName", () => {
+  it("プロジェクト名からコンテナ名を生成する", () => {
+    assert.equal(buildContainerName("my-project"), "ai-env-my-project");
+  });
+
+  it("空文字の場合は 'ai-env-' + 空文字になる", () => {
+    assert.equal(buildContainerName(""), "ai-env-");
+  });
+});
+
+// ===== buildAttachArgs =====
+
+describe("buildAttachArgs", () => {
+  it("container exec コマンドを組み立てる", () => {
+    const args = buildAttachArgs("abc123");
+    assert.deepEqual(args, ["exec", "-it", "abc123", "/bin/bash"]);
+  });
+});
+
+// ===== findContainerByLabel =====
+
+describe("findContainerByLabel", () => {
+  it("ラベルにマッチするコンテナがあればその ID を返す", () => {
+    const exec = makeExecMock(["abc123\ndef456\n"]);
+    assert.equal(findContainerByLabel("ai-env.project=my-project", exec), "abc123");
+  });
+
+  it("ラベルにマッチするコンテナがなければ undefined を返す", () => {
+    const exec = makeExecMock(["\n"]);
+    assert.equal(findContainerByLabel("ai-env.project=nonexistent", exec), undefined);
+  });
+
+  it("exec が失敗したら undefined を返す", () => {
+    const exec = makeExecMock([new Error("container not found")]);
+    assert.equal(findContainerByLabel("ai-env.project=my-project", exec), undefined);
+  });
+});
+
 // ===== buildContainerArgs =====
 
 describe("buildContainerArgs", () => {
@@ -266,6 +309,21 @@ describe("buildContainerArgs", () => {
     const entryIdx = args.indexOf("--entrypoint");
     assert.ok(envIdx > 0 && volIdx > envIdx, "env → volume の順");
     assert.ok(entryIdx > volIdx, "entrypoint は volume より後");
+  });
+
+  it("hostProjectName が指定された場合、--label ai-env.project=... を含む", () => {
+    const args = buildContainerArgs(["--env=A=1"], ["--volume=/x:/y"], "echo", "my-project");
+    const labelIdx = args.indexOf("--label");
+    assert.ok(labelIdx > 0, "--label が含まれる");
+    assert.equal(args[labelIdx + 1], "ai-env.project=my-project");
+    // --label は --entrypoint より前に配置される
+    const entryIdx = args.indexOf("--entrypoint");
+    assert.ok(labelIdx < entryIdx, "--label は --entrypoint より前");
+  });
+
+  it("hostProjectName が未指定の場合、--label を含まない", () => {
+    const args = buildContainerArgs([], [], "echo");
+    assert.ok(!args.includes("--label"), "--label が含まれない");
   });
 });
 

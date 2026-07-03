@@ -42,6 +42,7 @@ type ExecFn = (file: string, args: string[], options: { encoding: "utf8" }) => s
 // パラメータ数を抑えつつ、コンテキストを明示的に扱えるようにする。
 export interface RunContext {
   apiKeyEnv: string | undefined;
+  attachMode: boolean;
   bashMode: boolean;
   model: string | undefined;
   provider: string | undefined;
@@ -235,18 +236,25 @@ export const buildContainerArgs = (
   envArgs: string[],
   volumeArgs: string[],
   initScript: string,
-): string[] => [
-  "run",
-  "-it",
-  "--rm",
-  ...envArgs,
-  ...volumeArgs,
-  "--entrypoint",
-  "/bin/bash",
-  IMAGE_NAME,
-  "-c",
-  initScript,
-];
+  hostProjectName?: string,
+): string[] => {
+  const labelArgs = hostProjectName
+    ? ["--label", `ai-env.project=${hostProjectName}`]
+    : [];
+  return [
+    "run",
+    "-it",
+    "--rm",
+    ...envArgs,
+    ...volumeArgs,
+    ...labelArgs,
+    "--entrypoint",
+    "/bin/bash",
+    IMAGE_NAME,
+    "-c",
+    initScript,
+  ];
+};
 
 export const loadCredentials = (exec: ExecFn = execFileSync as ExecFn): PartialCredentials => {
   const credentials: PartialCredentials = {};
@@ -295,7 +303,52 @@ export const runContainer = (
 export const isMacOS = (getPlatform: () => NodeJS.Platform = platform): boolean =>
   getPlatform() === "darwin";
 
+export const buildContainerName = (projectName: string): string =>
+  `ai-env-${projectName}`;
+
+export const buildAttachArgs = (containerId: string): string[] => [
+  "exec",
+  "-it",
+  containerId,
+  "/bin/bash",
+];
+/**
+ * 指定したラベルを持つ実行中のコンテナを検索し、最初に見つかったコンテナ ID を返す。
+ * 見つからない場合は undefined を返す。
+ */
+export const findContainerByLabel = (
+  label: string,
+  exec: ExecFn = execFileSync as ExecFn,
+): string | undefined => {
+  try {
+    const result = exec("container", ["ps", "-q", "--filter", `label=${label}`], {
+      encoding: "utf8",
+    });
+    const lines = result.trim().split("\n").filter(Boolean);
+    return lines[0] ?? undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+export const attachToContainer = (projectName: string): number => {
+  const label = `ai-env.project=${projectName}`;
+  const containerId = findContainerByLabel(label);
+  if (!containerId) {
+    console.error(
+      `カレントディレクトリ '${projectName}' で起動中のコンテナが見つかりません。先に 'ai-env' を実行してコンテナを起動してください。`,
+    );
+    return EXIT_ERROR;
+  }
+  const args = buildAttachArgs(containerId);
+  console.error(`$ container ${args.join(" ")}`);
+  return runContainer(args);
+};
+
 export const runContainerCommand = (ctx: RunContext): number => {
+  if (ctx.attachMode) {
+    return attachToContainer(ctx.hostProjectName);
+  }
   const envArgs = buildEnvArgs({
     credentials: ctx.credentials,
     herdrPaneId: ctx.herdrPaneId,
@@ -315,13 +368,14 @@ export const runContainerCommand = (ctx: RunContext): number => {
     projects: ctx.projects,
     resume: ctx.resume,
   });
-  const containerArgs = buildContainerArgs(envArgs, volumeArgs, initScript);
+  const containerArgs = buildContainerArgs(envArgs, volumeArgs, initScript, ctx.hostProjectName);
   console.error(`$ container ${redactSecrets(containerArgs).join(" ")}`);
   return runContainer(containerArgs);
 };
 
 export const prepareEnvironment = (params: {
   apiKeyEnv: string | undefined;
+  attachMode: boolean;
   bashMode: boolean;
   model: string | undefined;
   provider: string | undefined;
@@ -338,6 +392,7 @@ export const prepareEnvironment = (params: {
   const profileName = detectProfileName(process.cwd(), aiEnvConfig.profiles);
   return {
     apiKeyEnv: params.apiKeyEnv,
+    attachMode: params.attachMode,
     bashMode: params.bashMode,
     model: params.model,
     provider: params.provider,

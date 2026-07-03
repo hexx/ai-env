@@ -14,6 +14,7 @@ import { Command } from "commander";
 
 interface CliOptions {
   apiKeyEnv?: string;
+  attach?: boolean;
   bash?: boolean;
   model?: string;
   provider?: string;
@@ -30,6 +31,13 @@ const main = (options: CliOptions): number => {
       );
       return EXIT_ERROR;
     }
+    // --attach と --bash / --resume は排他的
+    if (options.attach && (options.bash || options.resume)) {
+      console.error(
+        "--attach は --bash や --resume と同時に指定できません。",
+      );
+      return EXIT_ERROR;
+    }
     // CLI オプションを SAFE_*_PATTERN で検証(設定ファイルと同一ルールで弾く)。
     // 検証エラーは handleError でメッセージ表示 + exit 1。
     const validated = validateCliOverrides({
@@ -40,6 +48,7 @@ const main = (options: CliOptions): number => {
     return runContainerCommand(
       prepareEnvironment({
         apiKeyEnv: validated.apiKeyEnv,
+        attachMode: options.attach ?? false,
         bashMode: options.bash ?? false,
         model: validated.model,
         provider: validated.provider,
@@ -59,6 +68,7 @@ program
   .name("ai-env")
   .description("私専用のAI開発用Dockerサンドボックス環境を簡単に起動するCLI")
   .version("0.1.0")
+  .option("--attach", "同じディレクトリで起動中のコンテナにアタッチする")
   .option("--bash", "pi を起動せずに bash シェルのみを起動する")
   .option("--resume", "pi-projects.json のセッションを引き継いで起動する")
   .option(
