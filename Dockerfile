@@ -2,9 +2,8 @@
 # Node 24 は Active LTS (2026-06 時点)。メジャーバージョンを明示固定して再現性を確保。
 FROM node:24-trixie-slim
 
-# Playwrightブラウザの共有インストールパスとデフォルトエディタの設定
-ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
-    EDITOR=nano
+# デフォルトエディタの設定
+ENV EDITOR=nano
 
 # =========================================================
 # 1. システムパッケージとツールのインストール
@@ -34,21 +33,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # 必須npmパッケージのグローバルインストール。
 # いずれも @latest を指定し、ビルドごとに最新版を取得する。
 # - pi-coding-agent / open-code-review は個人開発パッケージ
-# - playwright はバージョン固定すると依存解決の兼ね合いでビルドが
-#   失敗する場合があるため @latest
 # - pm2 は herdr-socat プロセスの管理に使用
 # - --no-cache でレイヤにnpmキャッシュを残さない(イメージサイズ削減)
+# ARG CACHEBUST を変更するとこの行以降のレイヤーが再実行される。
+ARG CACHEBUST=1
 RUN npm install -g --no-cache \
-        playwright@latest \
         @earendil-works/pi-coding-agent@latest \
         @alibaba-group/open-code-review@latest \
         pm2@latest
-
-# Playwrightブラウザ本体と依存ライブラリのインストール。
-# パーミッションは 755 とし、pi ユーザーがブラウザバイナリを実行できるが
-# 改ざんできないように。所有者は root のままにする。
-RUN npx playwright install --with-deps \
-    && chmod -R 755 /ms-playwright
 
 # =========================================================
 # 3. 実行ユーザーと環境の設定
@@ -59,10 +51,6 @@ RUN groupadd -r pi && useradd -r -m -g pi pi
 WORKDIR /workspace
 
 # pi-coding-agent を最新状態へアップデート。
-# ARG CACHEBUST を変更するとこの行以降のレイヤーが再実行される。
-# (ENV ではなく ARG を使うことで、コンテナ内に環境変数が残らない)
-# 例: docker build --build-arg CACHEBUST=$(date +%s) .
-ARG CACHEBUST=1
 RUN pi update --all
 
 USER pi
