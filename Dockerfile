@@ -40,6 +40,7 @@ ARG CACHEBUST=1
 RUN npm install -g --no-cache \
         @earendil-works/pi-coding-agent@latest \
         @alibaba-group/open-code-review@latest \
+        hunkdiff@latest \
         pm2@latest
 
 # =========================================================
