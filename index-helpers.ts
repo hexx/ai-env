@@ -313,19 +313,38 @@ export const buildAttachArgs = (containerId: string): string[] => [
   "/bin/bash",
 ];
 /**
- * 指定したラベルを持つ実行中のコンテナを検索し、最初に見つかったコンテナ ID を返す。
+ * 指定したラベルを持つコンテナ（実行中・停止中含む）を検索し、
+ * 最初に見つかったコンテナ ID を返す。
  * 見つからない場合は undefined を返す。
+ *
+ * container CLI には --filter オプションがないため、
+ * container list --format json --all の JSON 出力からラベルを確認する。
  */
 export const findContainerByLabel = (
   label: string,
   exec: ExecFn = execFileSync as ExecFn,
 ): string | undefined => {
   try {
-    const result = exec("container", ["ps", "-q", "--filter", `label=${label}`], {
-      encoding: "utf8",
-    });
-    const lines = result.trim().split("\n").filter(Boolean);
-    return lines[0] ?? undefined;
+    const result = exec(
+      "container",
+      ["list", "--format", "json", "--all"],
+      {
+        encoding: "utf8",
+      },
+    );
+    const containers: Array<{
+      configuration?: { id?: string; labels?: Record<string, string> };
+    }> = JSON.parse(result);
+    for (const container of containers) {
+      const labels = container.configuration?.labels;
+      if (!labels) continue;
+      for (const [key, value] of Object.entries(labels)) {
+        if (`${key}=${value}` === label) {
+          return container.configuration?.id;
+        }
+      }
+    }
+    return undefined;
   } catch {
     return undefined;
   }

@@ -271,12 +271,26 @@ describe("buildAttachArgs", () => {
 
 describe("findContainerByLabel", () => {
   it("ラベルにマッチするコンテナがあればその ID を返す", () => {
-    const exec = makeExecMock(["abc123\ndef456\n"]);
+    const mockContainers = JSON.stringify([
+      {
+        configuration: {
+          id: "abc123",
+          labels: { "ai-env.project": "my-project" },
+        },
+      },
+      {
+        configuration: {
+          id: "def456",
+          labels: { "other-label": "other-value" },
+        },
+      },
+    ]);
+    const exec = makeExecMock([mockContainers]);
     assert.equal(findContainerByLabel("ai-env.project=my-project", exec), "abc123");
   });
 
   it("ラベルにマッチするコンテナがなければ undefined を返す", () => {
-    const exec = makeExecMock(["\n"]);
+    const exec = makeExecMock([JSON.stringify([])]);
     assert.equal(findContainerByLabel("ai-env.project=nonexistent", exec), undefined);
   });
 
