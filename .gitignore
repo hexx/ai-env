@@ -34,3 +34,6 @@ coverage/
 # Misc
 .cache/
 .tmp/
+
+# pi agent skills
+.pi/
