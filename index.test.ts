@@ -50,6 +50,7 @@ const sampleProfile = (overrides: Partial<ProfileConfig> = {}): ProfileConfig =>
 });
 
 const sampleCredentials = (): Credentials => ({
+  DEEPSEEK_API_KEY: "sk-ds-123",
   GH_TOKEN: "ghp_abc123",
   LLM_API_KEY: "sk-llm-xyz",
   OPENCODE_API_KEY: "sk-oc-999",
@@ -223,7 +224,7 @@ describe("buildEnvArgs", () => {
       profile: sampleProfile(),
     });
     const envCount = envArgs.filter((a) => a.startsWith("--env=")).length;
-    assert.equal(envCount, 12, "12 個の --env 引数");
+    assert.equal(envCount, 13, "13 個の --env 引数");
   });
 
   it("PartialCredentials(一部欠落)でもエラーなく組み立て、欠落した値は空文字として出力する", () => {
@@ -483,8 +484,9 @@ describe("getHostIp", () => {
 
 describe("loadCredentials", () => {
   it("CREDENTIAL_SOURCES にある全クレデンシャルを名前付きで取得する", () => {
-    const exec = makeExecMock(["ghp_abc", "sk-llm", "sk-oc", "sk-or", "xmi-777"]);
+    const exec = makeExecMock(["sk-ds", "ghp_abc", "sk-llm", "sk-oc", "sk-or", "xmi-777"]);
     const creds = loadCredentials(exec);
+    assert.equal(creds.DEEPSEEK_API_KEY, "sk-ds");
     assert.equal(creds.GH_TOKEN, "ghp_abc");
     assert.equal(creds.LLM_API_KEY, "sk-llm");
     assert.equal(creds.OPENCODE_API_KEY, "sk-oc");
@@ -499,8 +501,9 @@ describe("loadCredentials", () => {
       warnings.push(msg);
     };
     try {
-      // 2 番目(LLM_API_KEY)だけ空文字を返すモック
-      const exec = makeExecMock(["v1", "", "v3", "v4", "v5"]);
+      // 3 番目(LLM_API_KEY)だけ空文字を返すモック
+      // DEEPSEEK_API_KEY, GH_TOKEN, LLM_API_KEY, OPENCODE_API_KEY, OPENROUTER_API_KEY, XIAOMI_TOKEN_PLAN_SGP_API_KEY
+      const exec = makeExecMock(["v0", "v1", "", "v3", "v4", "v5"]);
       const creds = loadCredentials(exec);
       // 例外を投げない
       assert.equal(creds.LLM_API_KEY, undefined, "LLM_API_KEY は undefined");
@@ -517,7 +520,7 @@ describe("loadCredentials", () => {
 
   it("CREDENTIAL_SOURCES の name と Credentials のキーが一致する", () => {
     // 型安全性の構造的保証: 配列に新エントリ追加で型も拡張される
-    const exec = makeExecMock(["v1", "v2", "v3", "v4", "v5"]);
+    const exec = makeExecMock(["v1", "v2", "v3", "v4", "v5", "v6"]);
     const creds = loadCredentials(exec);
     for (const src of CREDENTIAL_SOURCES) {
       assert.ok(src.name in creds, `${src.name} が creds に存在する`);

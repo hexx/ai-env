@@ -61,6 +61,11 @@ export interface RunContext {
 
 export const CREDENTIAL_SOURCES: CredentialSource[] = [
   {
+    args: ["find-generic-password", "-s", "DEEPSEEK_API_KEY", "-w"],
+    file: "security",
+    name: "DEEPSEEK_API_KEY",
+  },
+  {
     args: ["auth", "token"],
     file: "gh",
     name: "GH_TOKEN",
@@ -218,6 +223,7 @@ export const buildEnvArgs = (params: {
     `--env=OCR_LLM_URL=${params.profile.OCR_LLM_URL}`,
     `--env=OCR_LLM_TOKEN=${ocrToken}`,
     `--env=OCR_LLM_MODEL=${params.profile.OCR_LLM_MODEL}`,
+    `--env=DEEPSEEK_API_KEY=${params.credentials.DEEPSEEK_API_KEY ?? ""}`,
     `--env=XIAOMI_TOKEN_PLAN_SGP_API_KEY=${params.credentials.XIAOMI_TOKEN_PLAN_SGP_API_KEY ?? ""}`,
     `--env=OPENCODE_API_KEY=${params.credentials.OPENCODE_API_KEY ?? ""}`,
     `--env=OPENROUTER_API_KEY=${params.credentials.OPENROUTER_API_KEY ?? ""}`,

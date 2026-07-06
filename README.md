@@ -51,6 +51,7 @@ container images | grep pi-sandbox
 
 | 用途 | 取得元 |
 | --- | --- |
+| `DEEPSEEK_API_KEY` | macOS Keychain |
 | `XIAOMI_TOKEN_PLAN_SGP_API_KEY` | macOS Keychain |
 | `OPENCODE_API_KEY` | macOS Keychain |
 | `OPENROUTER_API_KEY` | macOS Keychain |
