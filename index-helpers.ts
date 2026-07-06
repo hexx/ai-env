@@ -26,6 +26,7 @@ const CONTAINER_WORKSPACE = "/workspace";
 const CONTAINER_SSH = "/tmp/.ssh";
 const CONTAINER_PI_HOME = "/home/pi/.pi";
 const CONTAINER_RTK_CONFIG = "/home/pi/.rtk";
+const CONTAINER_CTX = "/home/pi/.ctx";
 
 // ===== 型 =====
 
@@ -238,6 +239,7 @@ export const buildVolumeArgs = (home: string): string[] => [
   `--volume=${home}/.ssh:${CONTAINER_SSH}:ro`,
   `--volume=${home}/.pi:${CONTAINER_PI_HOME}`,
   `--volume=${home}/.config/rtk:${CONTAINER_RTK_CONFIG}`,
+  `--volume=${home}/.ctx:${CONTAINER_CTX}`,
 ];
 
 export const buildContainerArgs = (
