@@ -61,7 +61,8 @@ USER pi
 # herdr.dev のエンドポイントが改ざんされた場合に任意コードが実行される可能性あり。
 # herdr 公式のインストール方法に従っているため、本 Dockerfile ではチェックサム
 # 検証を追加できない。将来的にパッケージマネージャー対応があれば移行推奨。
-RUN curl -fsSL https://herdr.dev/install.sh | sh
+RUN curl -fsSL https://herdr.dev/install.sh | sh \
+    && curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh
 
 # =========================================================
 # 4. ユーザー固有の設定とエントリーポイント
