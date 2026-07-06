@@ -25,7 +25,7 @@ export const IMAGE_NAME = "pi-sandbox";
 const CONTAINER_WORKSPACE = "/workspace";
 const CONTAINER_SSH = "/tmp/.ssh";
 const CONTAINER_PI_HOME = "/home/pi/.pi";
-const CONTAINER_RTK_CONFIG = "/home/pi/.config/rtk";
+const CONTAINER_RTK_CONFIG = "/home/pi/.rtk";
 
 // ===== 型 =====
 

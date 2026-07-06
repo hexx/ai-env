@@ -167,7 +167,7 @@ describe("buildVolumeArgs", () => {
     assert.ok(volumeArgs.some((a) => a.endsWith(":/workspace")), "cwd → /workspace");
     assert.ok(volumeArgs.some((a) => a.includes("/Users/test/.ssh")), ".ssh の絶対パス");
     assert.ok(volumeArgs.some((a) => a.endsWith(":/home/pi/.pi")), ".pi → /home/pi/.pi");
-    assert.ok(volumeArgs.some((a) => a.endsWith(":/home/pi/.config/rtk")), ".config/rtk → /home/pi/.config/rtk");
+    assert.ok(volumeArgs.some((a) => a.endsWith(":/home/pi/.rtk")), ".config/rtk → /home/pi/.rtk");
   });
 });
 

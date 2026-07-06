@@ -62,7 +62,9 @@ USER pi
 # herdr 公式のインストール方法に従っているため、本 Dockerfile ではチェックサム
 # 検証を追加できない。将来的にパッケージマネージャー対応があれば移行推奨。
 RUN curl -fsSL https://herdr.dev/install.sh | sh \
-    && curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh
+    && curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh \
+    && mkdir -p /home/pi/.config \
+    && ln -s /home/pi/.rtk /home/pi/.config/rtk
 
 # =========================================================
 # 4. ユーザー固有の設定とエントリーポイント
