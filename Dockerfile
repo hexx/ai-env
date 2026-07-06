@@ -1,7 +1,7 @@
 # =========================================================
 # Stage 1: ctx.rs のビルド
 # =========================================================
-FROM rust:1.81-bookworm AS ctx-builder
+FROM rust:bookworm AS ctx-builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         pkg-config \
