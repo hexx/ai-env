@@ -1,3 +1,26 @@
+# =========================================================
+# Stage 1: ctx.rs のビルド
+# =========================================================
+FROM rust:1.81-bookworm AS ctx-builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        pkg-config \
+        libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /usr/src
+ADD https://github.com/ctxrs/ctx/archive/refs/tags/v0.19.0.tar.gz ctx-v0.19.0.tar.gz
+RUN tar xzf ctx-v0.19.0.tar.gz && \
+    mv ctx-0.19.0 ctx && \
+    rm ctx-v0.19.0.tar.gz
+
+WORKDIR /usr/src/ctx
+RUN cargo build -p ctx --release
+RUN cargo install --path crates/ctx-cli --root /usr/local
+
+# =========================================================
+# Stage 2: メインイメージ
+# =========================================================
 # ベースイメージ: Node.js 24 LTS (Debian trixie-slim)
 # Node 24 は Active LTS (2026-06 時点)。メジャーバージョンを明示固定して再現性を確保。
 FROM node:24-trixie-slim
@@ -44,7 +67,13 @@ RUN npm install -g --no-cache \
         pm2@latest
 
 # =========================================================
-# 3. 実行ユーザーと環境の設定
+# 3. ctx.rs バイナリのコピー
+# =========================================================
+# Stage 1 でビルドした ctx バイナリをコピー
+COPY --from=ctx-builder /usr/local/bin/ctx /usr/local/bin/ctx
+
+# =========================================================
+# 4. 実行ユーザーと環境の設定
 # =========================================================
 # セキュリティ向上のため、非rootユーザー (pi) を作成
 RUN groupadd -r pi && useradd -r -m -g pi pi
@@ -65,7 +94,7 @@ RUN curl -fsSL https://herdr.dev/install.sh | sh \
     && curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh
 
 # =========================================================
-# 4. ユーザー固有の設定とエントリーポイント
+# 5. ユーザー固有の設定とエントリーポイント
 # =========================================================
 # マウントしたディレクトリでのGit権限エラー対策
 RUN git config --global --add safe.directory /workspace
