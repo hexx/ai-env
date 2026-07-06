@@ -160,13 +160,14 @@ describe("buildVolumeArgs", () => {
     assert.match(sshArg!, /:ro$/, "末尾が :ro で終わる(読み取り専用)");
   });
 
-  it("3 つのボリュームマウントが含まれる(cwd, .ssh, .pi)", () => {
+  it("4 つのボリュームマウントが含まれる(cwd, .ssh, .pi, .config/rtk)", () => {
     const args = buildVolumeArgs("/Users/test");
     const volumeArgs = args.filter((a) => a.startsWith("--volume="));
-    assert.equal(volumeArgs.length, 3, "3 つの --volume 引数");
+    assert.equal(volumeArgs.length, 4, "4 つの --volume 引数");
     assert.ok(volumeArgs.some((a) => a.endsWith(":/workspace")), "cwd → /workspace");
     assert.ok(volumeArgs.some((a) => a.includes("/Users/test/.ssh")), ".ssh の絶対パス");
     assert.ok(volumeArgs.some((a) => a.endsWith(":/home/pi/.pi")), ".pi → /home/pi/.pi");
+    assert.ok(volumeArgs.some((a) => a.endsWith(":/home/pi/.config/rtk")), ".config/rtk → /home/pi/.config/rtk");
   });
 });
 

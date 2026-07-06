@@ -25,6 +25,7 @@ export const IMAGE_NAME = "pi-sandbox";
 const CONTAINER_WORKSPACE = "/workspace";
 const CONTAINER_SSH = "/tmp/.ssh";
 const CONTAINER_PI_HOME = "/home/pi/.pi";
+const CONTAINER_RTK_CONFIG = "/home/pi/.config/rtk";
 
 // ===== 型 =====
 
@@ -236,6 +237,7 @@ export const buildVolumeArgs = (home: string): string[] => [
   `--volume=${process.cwd()}:${CONTAINER_WORKSPACE}`,
   `--volume=${home}/.ssh:${CONTAINER_SSH}:ro`,
   `--volume=${home}/.pi:${CONTAINER_PI_HOME}`,
+  `--volume=${home}/.config/rtk:${CONTAINER_RTK_CONFIG}`,
 ];
 
 export const buildContainerArgs = (
