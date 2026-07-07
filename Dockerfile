@@ -9,10 +9,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /usr/src
-ADD https://github.com/ctxrs/ctx/archive/refs/tags/v0.19.0.tar.gz ctx-v0.19.0.tar.gz
-RUN tar xzf ctx-v0.19.0.tar.gz && \
-    mv ctx-0.19.0 ctx && \
-    rm ctx-v0.19.0.tar.gz
+ARG CTX_VERSION=0.20.0
+ADD https://github.com/ctxrs/ctx/archive/refs/tags/v${CTX_VERSION}.tar.gz ctx-v${CTX_VERSION}.tar.gz
+RUN tar xzf ctx-v${CTX_VERSION}.tar.gz && \
+    mv ctx-${CTX_VERSION} ctx && \
+    rm ctx-v${CTX_VERSION}.tar.gz
 
 WORKDIR /usr/src/ctx
 RUN cargo build -p ctx --release
