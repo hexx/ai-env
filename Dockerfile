@@ -1,25 +1,4 @@
 # =========================================================
-# Stage 1: ctx.rs のビルド
-# =========================================================
-FROM rust:bookworm AS ctx-builder
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        pkg-config \
-        libssl-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /usr/src
-ARG CTX_VERSION=0.20.0
-ADD https://github.com/ctxrs/ctx/archive/refs/tags/v${CTX_VERSION}.tar.gz ctx-v${CTX_VERSION}.tar.gz
-RUN tar xzf ctx-v${CTX_VERSION}.tar.gz && \
-    mv ctx-${CTX_VERSION} ctx && \
-    rm ctx-v${CTX_VERSION}.tar.gz
-
-WORKDIR /usr/src/ctx
-RUN cargo build -p ctx --release
-RUN cargo install --path crates/ctx-cli --root /usr/local
-
-# =========================================================
 # Stage 2: メインイメージ
 # =========================================================
 # ベースイメージ: Node.js 24 LTS (Debian trixie-slim)
@@ -68,10 +47,12 @@ RUN npm install -g --no-cache \
         pm2@latest
 
 # =========================================================
-# 3. ctx.rs バイナリのコピー
+# 3. ctx.rs のインストール
 # =========================================================
-# Stage 1 でビルドした ctx バイナリをコピー
-COPY --from=ctx-builder /usr/local/bin/ctx /usr/local/bin/ctx
+# 公式インストールスクリプトでプレビルドバイナリを取得
+# サプライチェーンリスク: ダウンロードしたスクリプトを直接実行しているため
+# ctx.rs のエンドポイントが改ざんされた場合に任意コードが実行される可能性あり。
+RUN curl -fsSL https://ctx.rs/install | sh
 
 # =========================================================
 # 4. 実行ユーザーと環境の設定
