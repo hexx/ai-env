@@ -190,9 +190,8 @@ const generateCommonScript = (piResumeFunc: string): string => {
 };
 
 // コンテナ起動直後にコンテナ内で実行する初期化スクリプトを生成。
-// SSH 鍵セットアップ → pi-resume 関数定義 → pi 起動の順。
-// herdr.sock は container run --volume でホストから直接マウントされるため、
-// コンテナ内での socat ブリッジは不要。pi 終了後にコンテナを終了する。
+// SSH 鍵セットアップ → pm2 管理下の socat ブリッジ → pi-resume 関数定義 → pi 起動の順。
+// pi 終了時に pm2 をクリーンアップしてコンテナを終了する。
 export const buildInitScript = (params: {
   projects: Record<string, ProjectConfig>;
   defaultProvider: string | undefined;
