@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # デフォルト起動モード用初期化スクリプト
-# 共通初期化 → プロジェクト名で case 解決 → pm2 クリーンアップ
+# 共通初期化 → プロジェクト名で case 解決 → 終了
 
 {{COMMON_SCRIPT}}
 
@@ -9,5 +9,4 @@ case "$project" in
 {{CASE_BODY}}
 esac
 rc=$?
-pm2 kill
 exit $rc

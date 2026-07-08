@@ -160,14 +160,15 @@ describe("buildVolumeArgs", () => {
     assert.match(sshArg!, /:ro$/, "末尾が :ro で終わる(読み取り専用)");
   });
 
-  it("5 つのボリュームマウントが含まれる(cwd, .ssh, .pi, .config/rtk, .ctx)", () => {
+  it("6 つのボリュームマウントが含まれる(cwd, .ssh, .pi, .config/rtk, .config/herdr, .ctx)", () => {
     const args = buildVolumeArgs("/Users/test");
     const volumeArgs = args.filter((a) => a.startsWith("--volume="));
-    assert.equal(volumeArgs.length, 5, "5 つの --volume 引数");
+    assert.equal(volumeArgs.length, 6, "6 つの --volume 引数");
     assert.ok(volumeArgs.some((a) => a.endsWith(":/workspace")), "cwd → /workspace");
     assert.ok(volumeArgs.some((a) => a.includes("/Users/test/.ssh")), ".ssh の絶対パス");
     assert.ok(volumeArgs.some((a) => a.endsWith(":/home/pi/.pi")), ".pi → /home/pi/.pi");
     assert.ok(volumeArgs.some((a) => a.endsWith(":/home/pi/.rtk")), ".config/rtk → /home/pi/.rtk");
+    assert.ok(volumeArgs.some((a) => a.endsWith(":/home/pi/.config/herdr")), ".config/herdr → /home/pi/.config/herdr");
     assert.ok(volumeArgs.some((a) => a.endsWith(":/home/pi/.ctx")), ".ctx → /home/pi/.ctx");
   });
 });
@@ -179,7 +180,6 @@ describe("buildEnvArgs", () => {
     const envArgs = buildEnvArgs({
       credentials: sampleCredentials(),
       herdrPaneId: "pane-1",
-      hostIp: "192.168.1.10",
       hostProjectName: "my-project",
       profile: sampleProfile({ OCR_LLM_TOKEN_KEY: "OPENCODE_API_KEY" }),
     });
@@ -193,7 +193,6 @@ describe("buildEnvArgs", () => {
         buildEnvArgs({
           credentials: sampleCredentials(),
           herdrPaneId: "pane-1",
-          hostIp: "192.168.1.10",
           hostProjectName: "my-project",
           profile: sampleProfile({ OCR_LLM_TOKEN_KEY: "NON_EXISTENT_KEY" }),
         }),
@@ -209,7 +208,6 @@ describe("buildEnvArgs", () => {
         buildEnvArgs({
           credentials: creds,
           herdrPaneId: "pane-1",
-          hostIp: "192.168.1.10",
           hostProjectName: "my-project",
           profile: sampleProfile({ OCR_LLM_TOKEN_KEY: "OPENCODE_API_KEY" }),
         }),
@@ -221,12 +219,11 @@ describe("buildEnvArgs", () => {
     const envArgs = buildEnvArgs({
       credentials: sampleCredentials(),
       herdrPaneId: "pane-1",
-      hostIp: "192.168.1.10",
       hostProjectName: "my-project",
       profile: sampleProfile(),
     });
     const envCount = envArgs.filter((a) => a.startsWith("--env=")).length;
-    assert.equal(envCount, 13, "13 個の --env 引数");
+    assert.equal(envCount, 12, "12 個の --env 引数");
   });
 
   it("PartialCredentials(一部欠落)でもエラーなく組み立て、欠落した値は空文字として出力する", () => {
@@ -238,7 +235,6 @@ describe("buildEnvArgs", () => {
     const envArgs = buildEnvArgs({
       credentials: partial,
       herdrPaneId: "pane-1",
-      hostIp: "192.168.1.10",
       hostProjectName: "my-project",
       profile: sampleProfile({ OCR_LLM_TOKEN_KEY: "OPENCODE_API_KEY" }),
     });
