@@ -49,13 +49,12 @@ RUN npm install -g --no-cache \
 # =========================================================
 # 3. ctx.rs のインストール
 # =========================================================
-# 公式インストールスクリプトでプレビルドバイナリを取得
-# サプライチェーンリスク: ダウンロードしたスクリプトを直接実行しているため
-# ctx.rs のエンドポイントが改ざんされた場合に任意コードが実行される可能性あり。
-# 一時ファイル方式でパイプのサイレント失敗を防止 (curl 失敗時にビルドが止まる)。
-RUN curl -fsSL -o /tmp/ctx-install.sh https://ctx.rs/install \
-    && sh /tmp/ctx-install.sh \
-    && rm /tmp/ctx-install.sh
+# GitHub Releases からプレビルドバイナリを直接取得
+# macOS (Apple Silicon) 前提のため aarch64 固定。
+# サプライチェーンリスク: ダウンロードしたバイナリを直接実行しているため
+# リリースが改ざんされた場合に任意コードが実行される可能性あり。
+RUN curl -fsSL -o /usr/local/bin/ctx https://github.com/ctxrs/ctx/releases/download/v0.21.0/ctx-linux-aarch64 \
+    && chmod +x /usr/local/bin/ctx
 
 # =========================================================
 # 4. 実行ユーザーと環境の設定
