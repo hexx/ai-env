@@ -65,6 +65,9 @@ WORKDIR /workspace
 # pi-coding-agent を最新状態へアップデート。
 RUN pi update --all
 
+# volume mount 用ディレクトリを事前作成（実行時に root 作成されるのを防ぐ）
+RUN mkdir -p /home/pi/.config/herdr && chown -R pi:pi /home/pi/.config
+
 USER pi
 
 # herdr のインストール
