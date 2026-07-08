@@ -179,6 +179,7 @@ describe("buildEnvArgs", () => {
     const envArgs = buildEnvArgs({
       credentials: sampleCredentials(),
       herdrPaneId: "pane-1",
+      hostIp: "192.168.1.10",
       hostProjectName: "my-project",
       profile: sampleProfile({ OCR_LLM_TOKEN_KEY: "OPENCODE_API_KEY" }),
     });
@@ -192,6 +193,7 @@ describe("buildEnvArgs", () => {
         buildEnvArgs({
           credentials: sampleCredentials(),
           herdrPaneId: "pane-1",
+          hostIp: "192.168.1.10",
           hostProjectName: "my-project",
           profile: sampleProfile({ OCR_LLM_TOKEN_KEY: "NON_EXISTENT_KEY" }),
         }),
@@ -207,6 +209,7 @@ describe("buildEnvArgs", () => {
         buildEnvArgs({
           credentials: creds,
           herdrPaneId: "pane-1",
+          hostIp: "192.168.1.10",
           hostProjectName: "my-project",
           profile: sampleProfile({ OCR_LLM_TOKEN_KEY: "OPENCODE_API_KEY" }),
         }),
@@ -218,11 +221,12 @@ describe("buildEnvArgs", () => {
     const envArgs = buildEnvArgs({
       credentials: sampleCredentials(),
       herdrPaneId: "pane-1",
+      hostIp: "192.168.1.10",
       hostProjectName: "my-project",
       profile: sampleProfile(),
     });
     const envCount = envArgs.filter((a) => a.startsWith("--env=")).length;
-    assert.equal(envCount, 12, "12 個の --env 引数");
+    assert.equal(envCount, 13, "13 個の --env 引数");
   });
 
   it("PartialCredentials(一部欠落)でもエラーなく組み立て、欠落した値は空文字として出力する", () => {
@@ -234,6 +238,7 @@ describe("buildEnvArgs", () => {
     const envArgs = buildEnvArgs({
       credentials: partial,
       herdrPaneId: "pane-1",
+      hostIp: "192.168.1.10",
       hostProjectName: "my-project",
       profile: sampleProfile({ OCR_LLM_TOKEN_KEY: "OPENCODE_API_KEY" }),
     });

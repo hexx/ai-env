@@ -27,7 +27,6 @@ const CONTAINER_SSH = "/tmp/.ssh";
 const CONTAINER_PI_HOME = "/home/pi/.pi";
 const CONTAINER_RTK_CONFIG = "/home/pi/.rtk";
 const CONTAINER_CTX = "/home/pi/.ctx";
-const CONTAINER_HERDR_SOCKET = "/home/pi/.config/herdr/herdr.sock";
 
 // ===== 型 =====
 
@@ -53,6 +52,7 @@ export interface RunContext {
   credentials: PartialCredentials;
   herdrPaneId: string;
   home: string;
+  hostIp: string;
   hostProjectName: string;
   profile: ProfileConfig;
   projects: Record<string, ProjectConfig>;
@@ -203,6 +203,7 @@ export const detectProfileName = (
 export const buildEnvArgs = (params: {
   credentials: PartialCredentials;
   herdrPaneId: string;
+  hostIp: string;
   hostProjectName: string;
   profile: ProfileConfig;
 }): string[] => {
@@ -218,6 +219,7 @@ export const buildEnvArgs = (params: {
   }
   return [
     `--env=HERDR_PANE_ID=${params.herdrPaneId}`,
+    `--env=HOST_IP=${params.hostIp}`,
     `--env=HOST_PROJECT_NAME=${params.hostProjectName}`,
     `--env=OCR_USE_ANTHROPIC=${params.profile.OCR_USE_ANTHROPIC}`,
     `--env=OCR_LLM_URL=${params.profile.OCR_LLM_URL}`,
@@ -245,19 +247,14 @@ export const buildContainerArgs = (
   volumeArgs: string[],
   initScript: string,
   hostProjectName?: string,
-  publishSocket?: string,
 ): string[] => {
   const labelArgs = hostProjectName
     ? ["--label", `ai-env.project=${hostProjectName}`]
-    : [];
-  const socketArgs = publishSocket
-    ? ["--publish-socket", publishSocket]
     : [];
   return [
     "run",
     "-it",
     "--rm",
-    ...socketArgs,
     ...envArgs,
     ...volumeArgs,
     ...labelArgs,
@@ -384,6 +381,7 @@ export const runContainerCommand = (ctx: RunContext): number => {
   const envArgs = buildEnvArgs({
     credentials: ctx.credentials,
     herdrPaneId: ctx.herdrPaneId,
+    hostIp: ctx.hostIp,
     hostProjectName: ctx.hostProjectName,
     profile: ctx.profile,
   });
@@ -399,11 +397,7 @@ export const runContainerCommand = (ctx: RunContext): number => {
     projects: ctx.projects,
     resume: ctx.resume,
   });
-  // herdr ソケットを publish-socket で共有。
-  // ホスト側: ~/.config/herdr/herdr.sock, コンテナ側: /home/pi/.config/herdr/herdr.sock
-  const hostHerdrSocket = `${ctx.home}/.config/herdr/herdr.sock`;
-  const publishSocket = `${hostHerdrSocket}:${CONTAINER_HERDR_SOCKET}`;
-  const containerArgs = buildContainerArgs(envArgs, volumeArgs, initScript, ctx.hostProjectName, publishSocket);
+  const containerArgs = buildContainerArgs(envArgs, volumeArgs, initScript, ctx.hostProjectName);
   console.error(`$ container ${redactSecrets(containerArgs).join(" ")}`);
   return runContainer(containerArgs);
 };
@@ -435,6 +429,7 @@ export const prepareEnvironment = (params: {
     credentials,
     herdrPaneId,
     home,
+    hostIp: getHostIp(),
     hostProjectName,
     // detectProfileName が profiles 内の存在を保証しているため non-null assertion を使用
     profile: aiEnvConfig.profiles[profileName]!,
