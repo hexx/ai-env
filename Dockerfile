@@ -18,6 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         gnupg \
         nano \
         git \
+        socat \
         curl \
     && mkdir -p -m 755 /etc/apt/keyrings \
     && wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg > /etc/apt/keyrings/githubcli-archive-keyring.gpg \
@@ -35,13 +36,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # 必須npmパッケージのグローバルインストール。
 # いずれも @latest を指定し、ビルドごとに最新版を取得する。
 # - pi-coding-agent / open-code-review は個人開発パッケージ
+# - pm2 は herdr-socat プロセスの管理に使用
 # - --no-cache でレイヤにnpmキャッシュを残さない(イメージサイズ削減)
 # ARG CACHEBUST を変更するとこの行以降のレイヤーが再実行される。
 ARG CACHEBUST=1
 RUN npm install -g --no-cache \
         @earendil-works/pi-coding-agent@latest \
         @alibaba-group/open-code-review@latest \
-        hunkdiff@latest
+        hunkdiff@latest \
+        pm2@latest
 
 # =========================================================
 # 3. ctx.rs のインストール
@@ -64,9 +67,6 @@ WORKDIR /workspace
 
 # pi-coding-agent を最新状態へアップデート。
 RUN pi update --all
-
-# volume mount 用ディレクトリを事前作成（実行時に root 作成されるのを防ぐ）
-RUN mkdir -p /home/pi/.config/herdr && chown -R pi:pi /home/pi/.config
 
 USER pi
 
