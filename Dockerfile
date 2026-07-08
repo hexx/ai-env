@@ -52,7 +52,10 @@ RUN npm install -g --no-cache \
 # 公式インストールスクリプトでプレビルドバイナリを取得
 # サプライチェーンリスク: ダウンロードしたスクリプトを直接実行しているため
 # ctx.rs のエンドポイントが改ざんされた場合に任意コードが実行される可能性あり。
-RUN curl -fsSL https://ctx.rs/install | sh
+# 一時ファイル方式でパイプのサイレント失敗を防止 (curl 失敗時にビルドが止まる)。
+RUN curl -fsSL -o /tmp/ctx-install.sh https://ctx.rs/install \
+    && sh /tmp/ctx-install.sh \
+    && rm /tmp/ctx-install.sh
 
 # =========================================================
 # 4. 実行ユーザーと環境の設定
