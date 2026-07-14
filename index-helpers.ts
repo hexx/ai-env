@@ -64,6 +64,11 @@ export interface RunContext {
 
 export const CREDENTIAL_SOURCES: CredentialSource[] = [
   {
+    args: ["find-generic-password", "-s", "BRAVE_SEARCH_API_KEY", "-w"],
+    file: "security",
+    name: "BRAVE_SEARCH_API_KEY",
+  },
+  {
     args: ["find-generic-password", "-s", "DEEPSEEK_API_KEY", "-w"],
     file: "security",
     name: "DEEPSEEK_API_KEY",
@@ -234,6 +239,7 @@ export const buildEnvArgs = (params: {
     `--env=OPENROUTER_API_KEY=${params.credentials.OPENROUTER_API_KEY ?? ""}`,
     `--env=LLM_API_KEY=${params.credentials.LLM_API_KEY ?? ""}`,
     `--env=GH_TOKEN=${params.credentials.GH_TOKEN ?? ""}`,
+    `--env=BRAVE_SEARCH_API_KEY=${params.credentials.BRAVE_SEARCH_API_KEY ?? ""}`,
   ];
 };
 
