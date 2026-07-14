@@ -50,6 +50,7 @@ const sampleProfile = (overrides: Partial<ProfileConfig> = {}): ProfileConfig =>
 });
 
 const sampleCredentials = (): Credentials => ({
+  BRAVE_SEARCH_API_KEY: "brave-111",
   DEEPSEEK_API_KEY: "sk-ds-123",
   GH_TOKEN: "ghp_abc123",
   LLM_API_KEY: "sk-llm-xyz",
@@ -114,6 +115,13 @@ describe("redactSecrets", () => {
   it("_TOKEN で終わる env 引数の値も *** に置き換える", () => {
     const redacted = redactSecrets(["--env=GH_TOKEN=ghp_abc"]);
     assert.deepEqual(redacted, ["--env=GH_TOKEN=***"]);
+  });
+
+  it("CREDENTIAL_SOURCES 由来の BRAVE_SEARCH_API_KEY も *** に置き換える", () => {
+    // BRAVE_SEARCH_API_KEY は CREDENTIAL_SOURCES に追加されたことで
+    // SECRET_ENV_PATTERN のマスク対象(末尾 _API_KEY)に自動で含まれる。
+    const redacted = redactSecrets(["--env=BRAVE_SEARCH_API_KEY=brave-secret"]);
+    assert.deepEqual(redacted, ["--env=BRAVE_SEARCH_API_KEY=***"]);
   });
 
   it("複数の引数を一括でマスクする(混在ケース)", () => {
@@ -220,7 +228,7 @@ describe("buildEnvArgs", () => {
     );
   });
 
-  it("全クレデンシャルが env 引数として含まれる(全 12 個)", () => {
+  it("全クレデンシャルが env 引数として含まれる(全 15 個)", () => {
     const envArgs = buildEnvArgs({
       credentials: sampleCredentials(),
       herdrPaneId: "pane-1",
@@ -230,7 +238,7 @@ describe("buildEnvArgs", () => {
       profile: sampleProfile(),
     });
     const envCount = envArgs.filter((a) => a.startsWith("--env=")).length;
-    assert.equal(envCount, 14, "14 個の --env 引数");
+    assert.equal(envCount, 15, "15 個の --env 引数");
   });
 
   it("PartialCredentials(一部欠落)でもエラーなく組み立て、欠落した値は空文字として出力する", () => {
@@ -251,6 +259,19 @@ describe("buildEnvArgs", () => {
     const or = envArgs.find((a) => a.startsWith("--env=OPENROUTER_API_KEY="));
     assert.equal(xiaomi, "--env=XIAOMI_TOKEN_PLAN_SGP_API_KEY=");
     assert.equal(or, "--env=OPENROUTER_API_KEY=");
+  });
+
+  it("BRAVE_SEARCH_API_KEY が env 引数として注入される", () => {
+    const envArgs = buildEnvArgs({
+      credentials: sampleCredentials(),
+      herdrPaneId: "pane-1",
+      hostIp: "192.168.1.10",
+      hostProjectName: "my-project",
+      profileName: "pi-work",
+      profile: sampleProfile(),
+    });
+    const braveArg = envArgs.find((a) => a.startsWith("--env=BRAVE_SEARCH_API_KEY="));
+    assert.equal(braveArg, "--env=BRAVE_SEARCH_API_KEY=brave-111");
   });
 
   it("AI_ENV_PROFILE がプロファイル名で注入される", () => {
@@ -504,8 +525,19 @@ describe("getHostIp", () => {
 
 describe("loadCredentials", () => {
   it("CREDENTIAL_SOURCES にある全クレデンシャルを名前付きで取得する", () => {
-    const exec = makeExecMock(["sk-ds", "ghp_abc", "sk-llm", "sk-oc", "sk-or", "xmi-777"]);
+    // 取得順: BRAVE_SEARCH_API_KEY, DEEPSEEK_API_KEY, GH_TOKEN, LLM_API_KEY,
+    //        OPENCODE_API_KEY, OPENROUTER_API_KEY, XIAOMI_TOKEN_PLAN_SGP_API_KEY
+    const exec = makeExecMock([
+      "brave-val",
+      "sk-ds",
+      "ghp_abc",
+      "sk-llm",
+      "sk-oc",
+      "sk-or",
+      "xmi-777",
+    ]);
     const creds = loadCredentials(exec);
+    assert.equal(creds.BRAVE_SEARCH_API_KEY, "brave-val");
     assert.equal(creds.DEEPSEEK_API_KEY, "sk-ds");
     assert.equal(creds.GH_TOKEN, "ghp_abc");
     assert.equal(creds.LLM_API_KEY, "sk-llm");
@@ -521,15 +553,16 @@ describe("loadCredentials", () => {
       warnings.push(msg);
     };
     try {
-      // 3 番目(LLM_API_KEY)だけ空文字を返すモック
-      // DEEPSEEK_API_KEY, GH_TOKEN, LLM_API_KEY, OPENCODE_API_KEY, OPENROUTER_API_KEY, XIAOMI_TOKEN_PLAN_SGP_API_KEY
-      const exec = makeExecMock(["v0", "v1", "", "v3", "v4", "v5"]);
+      // 4 番目(LLM_API_KEY)だけ空文字を返すモック
+      // BRAVE_SEARCH_API_KEY, DEEPSEEK_API_KEY, GH_TOKEN, LLM_API_KEY,
+      // OPENCODE_API_KEY, OPENROUTER_API_KEY, XIAOMI_TOKEN_PLAN_SGP_API_KEY
+      const exec = makeExecMock(["v0", "v1", "v2", "", "v4", "v5", "v6"]);
       const creds = loadCredentials(exec);
       // 例外を投げない
       assert.equal(creds.LLM_API_KEY, undefined, "LLM_API_KEY は undefined");
       // 他のクレデンシャルは取得できている
-      assert.equal(creds.GH_TOKEN, "v1");
-      assert.equal(creds.OPENCODE_API_KEY, "v3");
+      assert.equal(creds.GH_TOKEN, "v2");
+      assert.equal(creds.OPENCODE_API_KEY, "v4");
       // 警告メッセージにクレデンシャル名が含まれる
       assert.equal(warnings.length, 1);
       assert.match(warnings[0] ?? "", /LLM_API_KEY/);
@@ -540,7 +573,7 @@ describe("loadCredentials", () => {
 
   it("CREDENTIAL_SOURCES の name と Credentials のキーが一致する", () => {
     // 型安全性の構造的保証: 配列に新エントリ追加で型も拡張される
-    const exec = makeExecMock(["v1", "v2", "v3", "v4", "v5", "v6"]);
+    const exec = makeExecMock(["v1", "v2", "v3", "v4", "v5", "v6", "v7"]);
     const creds = loadCredentials(exec);
     for (const src of CREDENTIAL_SOURCES) {
       assert.ok(src.name in creds, `${src.name} が creds に存在する`);
