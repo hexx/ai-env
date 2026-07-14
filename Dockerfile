@@ -22,6 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
         python3 \
         python-is-python3 \
+        jq \
     && mkdir -p -m 755 /etc/apt/keyrings \
     && wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg > /etc/apt/keyrings/githubcli-archive-keyring.gpg \
     && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
