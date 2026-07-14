@@ -181,6 +181,7 @@ describe("buildEnvArgs", () => {
       herdrPaneId: "pane-1",
       hostIp: "192.168.1.10",
       hostProjectName: "my-project",
+      profileName: "pi-work",
       profile: sampleProfile({ OCR_LLM_TOKEN_KEY: "OPENCODE_API_KEY" }),
     });
     const ocrTokenArg = envArgs.find((a) => a.startsWith("--env=OCR_LLM_TOKEN="));
@@ -195,6 +196,7 @@ describe("buildEnvArgs", () => {
           herdrPaneId: "pane-1",
           hostIp: "192.168.1.10",
           hostProjectName: "my-project",
+          profileName: "pi-work",
           profile: sampleProfile({ OCR_LLM_TOKEN_KEY: "NON_EXISTENT_KEY" }),
         }),
       /OCR_LLM_TOKEN_KEY|NON_EXISTENT_KEY/,
@@ -211,6 +213,7 @@ describe("buildEnvArgs", () => {
           herdrPaneId: "pane-1",
           hostIp: "192.168.1.10",
           hostProjectName: "my-project",
+          profileName: "pi-work",
           profile: sampleProfile({ OCR_LLM_TOKEN_KEY: "OPENCODE_API_KEY" }),
         }),
       /OPENCODE_API_KEY/,
@@ -223,10 +226,11 @@ describe("buildEnvArgs", () => {
       herdrPaneId: "pane-1",
       hostIp: "192.168.1.10",
       hostProjectName: "my-project",
+      profileName: "pi-work",
       profile: sampleProfile(),
     });
     const envCount = envArgs.filter((a) => a.startsWith("--env=")).length;
-    assert.equal(envCount, 13, "13 個の --env 引数");
+    assert.equal(envCount, 14, "14 個の --env 引数");
   });
 
   it("PartialCredentials(一部欠落)でもエラーなく組み立て、欠落した値は空文字として出力する", () => {
@@ -240,12 +244,26 @@ describe("buildEnvArgs", () => {
       herdrPaneId: "pane-1",
       hostIp: "192.168.1.10",
       hostProjectName: "my-project",
+      profileName: "pi-work",
       profile: sampleProfile({ OCR_LLM_TOKEN_KEY: "OPENCODE_API_KEY" }),
     });
     const xiaomi = envArgs.find((a) => a.startsWith("--env=XIAOMI_TOKEN_PLAN_SGP_API_KEY="));
     const or = envArgs.find((a) => a.startsWith("--env=OPENROUTER_API_KEY="));
     assert.equal(xiaomi, "--env=XIAOMI_TOKEN_PLAN_SGP_API_KEY=");
     assert.equal(or, "--env=OPENROUTER_API_KEY=");
+  });
+
+  it("AI_ENV_PROFILE がプロファイル名で注入される", () => {
+    const envArgs = buildEnvArgs({
+      credentials: sampleCredentials(),
+      herdrPaneId: "pane-1",
+      hostIp: "192.168.1.10",
+      hostProjectName: "my-project",
+      profile: sampleProfile(),
+      profileName: "pi-work",
+    });
+    const profileArg = envArgs.find((a) => a.startsWith("--env=AI_ENV_PROFILE="));
+    assert.equal(profileArg, "--env=AI_ENV_PROFILE=pi-work");
   });
 });
 
