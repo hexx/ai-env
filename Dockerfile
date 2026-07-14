@@ -20,6 +20,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         git \
         socat \
         curl \
+        python3 \
+        python-is-python3 \
     && mkdir -p -m 755 /etc/apt/keyrings \
     && wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg > /etc/apt/keyrings/githubcli-archive-keyring.gpg \
     && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
@@ -29,6 +31,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         openssh-client \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+# =========================================================
+# 1.5 Python 用パッケージマネージャー uv のインストール
+# =========================================================
+# 公式インストールスクリプトを使用。Astral 製の高速パッケージマネージャ。
+# UV_INSTALL_DIR を /usr/local/bin に指定し、全ユーザー（pi 含む）の PATH 上へ配置。
+# インストール時のみ必要な変数のため ENV ではなく RUN 内のスコープ変数として指定。
+# サプライチェーンリスク: ダウンロードしたスクリプトを直接実行しているため
+# astral.sh のエンドポイントが改ざんされた場合に任意コードが実行される可能性あり。
+RUN UV_INSTALL_DIR=/usr/local/bin curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # =========================================================
 # 2. 開発ツール・ライブラリのセットアップ
