@@ -55,6 +55,7 @@ export interface RunContext {
   hostIp: string;
   hostProjectName: string;
   profile: ProfileConfig;
+  profileName: string;
   projects: Record<string, ProjectConfig>;
 }
 
@@ -206,6 +207,7 @@ export const buildEnvArgs = (params: {
   hostIp: string;
   hostProjectName: string;
   profile: ProfileConfig;
+  profileName: string;
 }): string[] => {
   // profile.OCR_LLM_TOKEN_KEY で指定されたクレデンシャルを取り出して OCR_LLM_TOKEN に注入。
   // 未定義なら明確なエラーで停止(undefined 文字列が注入されるのを防ぐ)。
@@ -221,6 +223,7 @@ export const buildEnvArgs = (params: {
     `--env=HERDR_PANE_ID=${params.herdrPaneId}`,
     `--env=HOST_IP=${params.hostIp}`,
     `--env=HOST_PROJECT_NAME=${params.hostProjectName}`,
+    `--env=AI_ENV_PROFILE=${params.profileName}`,
     `--env=OCR_USE_ANTHROPIC=${params.profile.OCR_USE_ANTHROPIC}`,
     `--env=OCR_LLM_URL=${params.profile.OCR_LLM_URL}`,
     `--env=OCR_LLM_TOKEN=${ocrToken}`,
@@ -384,6 +387,7 @@ export const runContainerCommand = (ctx: RunContext): number => {
     hostIp: ctx.hostIp,
     hostProjectName: ctx.hostProjectName,
     profile: ctx.profile,
+    profileName: ctx.profileName,
   });
   const volumeArgs = buildVolumeArgs(ctx.home);
   const initScript = buildInitScript({
@@ -433,6 +437,7 @@ export const prepareEnvironment = (params: {
     hostProjectName,
     // detectProfileName が profiles 内の存在を保証しているため non-null assertion を使用
     profile: aiEnvConfig.profiles[profileName]!,
+    profileName,
     projects: aiEnvConfig.projects,
   };
 };
