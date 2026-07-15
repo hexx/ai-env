@@ -39,9 +39,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # 公式インストールスクリプトを使用。Astral 製の高速パッケージマネージャ。
 # UV_INSTALL_DIR を /usr/local/bin に指定し、全ユーザー（pi 含む）の PATH 上へ配置。
 # インストール時のみ必要な変数のため ENV ではなく RUN 内のスコープ変数として指定。
+# 注意: `VAR=x curl ... | sh` とすると VAR は左辺の curl にしか適用されず、右辺の sh
+# （実際にスクリプトを実行する側）へは引き継がれない。そのままでは uv がデフォルトの
+# ~/.local/bin（ビルド時は /root/.local/bin）へ入り、pi ユーザーから使えなくなる。
+# ここではスクリプトを一時ファイルへ落としてから `VAR=x sh <file>` とし、確実に
+# install.sh 側へ UV_INSTALL_DIR を届ける。&& チェーンにすることで curl 失敗も
+# ビルドエラーとして検知される（pipefail 非設定下のサイレント失敗を防止）。
 # サプライチェーンリスク: ダウンロードしたスクリプトを直接実行しているため
 # astral.sh のエンドポイントが改ざんされた場合に任意コードが実行される可能性あり。
-RUN UV_INSTALL_DIR=/usr/local/bin curl -LsSf https://astral.sh/uv/install.sh | sh
+RUN curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv-install.sh \
+    && UV_INSTALL_DIR=/usr/local/bin sh /tmp/uv-install.sh \
+    && rm /tmp/uv-install.sh
 
 # =========================================================
 # 2. 開発ツール・ライブラリのセットアップ
