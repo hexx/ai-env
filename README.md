@@ -57,6 +57,7 @@ container images | grep pi-sandbox
 | `OPENCODE_API_KEY` | macOS Keychain |
 | `OPENROUTER_API_KEY` | macOS Keychain |
 | `LLM_API_KEY` | macOS Keychain |
+| `JINA_API_KEY` | macOS Keychain |
 | `GH_TOKEN` | `gh auth token` |
 
 ## pi セッション再開設定

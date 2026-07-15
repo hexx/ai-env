@@ -79,6 +79,11 @@ export const CREDENTIAL_SOURCES: CredentialSource[] = [
     name: "GH_TOKEN",
   },
   {
+    args: ["find-generic-password", "-s", "JINA_API_KEY", "-w"],
+    file: "security",
+    name: "JINA_API_KEY",
+  },
+  {
     args: ["find-generic-password", "-s", "LLM_API_KEY", "-w"],
     file: "security",
     name: "LLM_API_KEY",
@@ -239,6 +244,7 @@ export const buildEnvArgs = (params: {
     `--env=OPENROUTER_API_KEY=${params.credentials.OPENROUTER_API_KEY ?? ""}`,
     `--env=LLM_API_KEY=${params.credentials.LLM_API_KEY ?? ""}`,
     `--env=GH_TOKEN=${params.credentials.GH_TOKEN ?? ""}`,
+    `--env=JINA_API_KEY=${params.credentials.JINA_API_KEY ?? ""}`,
     `--env=BRAVE_SEARCH_API_KEY=${params.credentials.BRAVE_SEARCH_API_KEY ?? ""}`,
   ];
 };
