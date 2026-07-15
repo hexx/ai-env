@@ -49,15 +49,15 @@ container images | grep pi-sandbox
 
 以下のクレデンシャルを実行時に動的に取得する:
 
-| 用途 | 取得元 |
-| --- | --- |
-| `BRAVE_SEARCH_API_KEY` | macOS Keychain |
-| `DEEPSEEK_API_KEY` | macOS Keychain |
-| `XIAOMI_TOKEN_PLAN_SGP_API_KEY` | macOS Keychain |
-| `OPENCODE_API_KEY` | macOS Keychain |
-| `OPENROUTER_API_KEY` | macOS Keychain |
-| `LLM_API_KEY` | macOS Keychain |
-| `GH_TOKEN` | `gh auth token` |
+| 用途                            | 取得元          |
+|---------------------------------|-----------------|
+| `DEEPSEEK_API_KEY`              | macOS Keychain  |
+| `XIAOMI_TOKEN_PLAN_SGP_API_KEY` | macOS Keychain  |
+| `OPENCODE_API_KEY`              | macOS Keychain  |
+| `OPENROUTER_API_KEY`            | macOS Keychain  |
+| `LLM_API_KEY`                   | macOS Keychain  |
+| `JINA_API_KEY`                  | macOS Keychain  |
+| `GH_TOKEN`                      | `gh auth token` |
 
 ## pi セッション再開設定
 
