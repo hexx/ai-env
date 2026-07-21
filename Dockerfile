@@ -69,8 +69,12 @@ RUN npm install -g --no-cache \
 # Playwrightブラウザ本体と依存ライブラリのインストール。
 # パーミッションは 755 とし、pi ユーザーがブラウザバイナリを実行できるが
 # 改ざんできないように。所有者は root のままにする。
+# --with-deps は内部で apt-get update/install を実行するため、実行後に
+# apt のリスト/キャッシュと一時ファイルを削除してイメージサイズを削減する。
 RUN npx playwright install --with-deps \
-    && chmod -R 755 /ms-playwright
+    && chmod -R 755 /ms-playwright \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /root/.cache /tmp/* /var/tmp/*
 
 # =========================================================
 # 3. ctx.rs のインストール
@@ -91,7 +95,10 @@ RUN groupadd -r pi && useradd -r -m -g pi pi
 WORKDIR /workspace
 
 # pi-coding-agent を最新状態へアップデート。
-RUN pi update --all
+# 実行ユーザーは pi（HOME=/home/pi）のため root のキャッシュは実行時に不要。
+# イメージサイズ削減のためキャッシュと一時ファイルを削除する。
+RUN pi update --all \
+    && rm -rf /root/.cache /root/.npm /tmp/* /var/tmp/*
 
 USER pi
 
@@ -101,7 +108,8 @@ USER pi
 # herdr 公式のインストール方法に従っているため、本 Dockerfile ではチェックサム
 # 検証を追加できない。将来的にパッケージマネージャー対応があれば移行推奨。
 RUN curl -fsSL https://herdr.dev/install.sh | sh \
-    && curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh
+    && curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh \
+    && rm -rf /home/pi/.cache /tmp/*
 
 # =========================================================
 # 5. ユーザー固有の設定とエントリーポイント
