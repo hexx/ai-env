@@ -99,6 +99,11 @@ export const CREDENTIAL_SOURCES: CredentialSource[] = [
     name: "OPENROUTER_API_KEY",
   },
   {
+    args: ["find-generic-password", "-s", "QWEN_TOKEN_PLAN_API_KEY", "-w"],
+    file: "security",
+    name: "QWEN_TOKEN_PLAN_API_KEY",
+  },
+  {
     args: [
       "find-generic-password",
       "-s",
@@ -240,6 +245,7 @@ export const buildEnvArgs = (params: {
     `--env=OCR_LLM_MODEL=${params.profile.OCR_LLM_MODEL}`,
     `--env=DEEPSEEK_API_KEY=${params.credentials.DEEPSEEK_API_KEY ?? ""}`,
     `--env=XIAOMI_TOKEN_PLAN_SGP_API_KEY=${params.credentials.XIAOMI_TOKEN_PLAN_SGP_API_KEY ?? ""}`,
+    `--env=QWEN_TOKEN_PLAN_API_KEY=${params.credentials.QWEN_TOKEN_PLAN_API_KEY ?? ""}`,
     `--env=OPENCODE_API_KEY=${params.credentials.OPENCODE_API_KEY ?? ""}`,
     `--env=OPENROUTER_API_KEY=${params.credentials.OPENROUTER_API_KEY ?? ""}`,
     `--env=LLM_API_KEY=${params.credentials.LLM_API_KEY ?? ""}`,
