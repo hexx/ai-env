@@ -69,9 +69,22 @@ RUN npm install -g --no-cache \
 # Playwrightブラウザ本体と依存ライブラリのインストール。
 # パーミッションは 755 とし、pi ユーザーがブラウザバイナリを実行できるが
 # 改ざんできないように。所有者は root のままにする。
+#
+# ブラウザは chromium の headless shell のみインストールする（--only-shell chromium）。
+# 本サンドボックスはディスプレイサーバのない Docker コンテナ（headless 専用）で
+# 動作するため、headed モードの GUI ブラウザ本体は不要。firefox / webkit は
+# クロスブラウザテスト用途でのみ必要となるが、本環境のソース・テンプレート・CI に
+# それらを使うコードはなく、AI エージェントによるスクレイピング / E2E / スクリーン
+# ショット等の用途は chromium headless shell で全て賄える。
+# 全ブラウザ（chromium headed + headless shell + firefox + webkit + ffmpeg）から
+# headless shell + ffmpeg に絞ることで、ダウンロード換算で約 375MB（展開後の
+# イメージレイヤーではそれ以上）のサイズ削減になる。
+# 将来 headed モードや他ブラウザが必要になった場合は、本行の --only-shell を外すか
+# `npx playwright install <browser>` を実行して再ビルドすること。
+#
 # --with-deps は内部で apt-get update/install を実行するため、実行後に
 # apt のリスト/キャッシュと一時ファイルを削除してイメージサイズを削減する。
-RUN npx playwright install --with-deps \
+RUN npx playwright install --with-deps --only-shell chromium \
     && chmod -R 755 /ms-playwright \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /root/.cache /tmp/* /var/tmp/*
