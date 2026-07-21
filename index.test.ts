@@ -57,6 +57,7 @@ const sampleCredentials = (): Credentials => ({
   LLM_API_KEY: "sk-llm-xyz",
   OPENCODE_API_KEY: "sk-oc-999",
   OPENROUTER_API_KEY: "sk-or-555",
+  QWEN_TOKEN_PLAN_API_KEY: "qwen-888",
   XIAOMI_TOKEN_PLAN_SGP_API_KEY: "xmi-777",
 });
 
@@ -229,7 +230,7 @@ describe("buildEnvArgs", () => {
     );
   });
 
-  it("全クレデンシャルが env 引数として含まれる(全 16 個)", () => {
+  it("全クレデンシャルが env 引数として含まれる(全 17 個)", () => {
     const envArgs = buildEnvArgs({
       credentials: sampleCredentials(),
       herdrPaneId: "pane-1",
@@ -239,7 +240,7 @@ describe("buildEnvArgs", () => {
       profile: sampleProfile(),
     });
     const envCount = envArgs.filter((a) => a.startsWith("--env=")).length;
-    assert.equal(envCount, 16, "16 個の --env 引数");
+    assert.equal(envCount, 17, "17 個の --env 引数");
   });
 
   it("PartialCredentials(一部欠落)でもエラーなく組み立て、欠落した値は空文字として出力する", () => {
@@ -528,7 +529,7 @@ describe("loadCredentials", () => {
   it("CREDENTIAL_SOURCES にある全クレデンシャルを名前付きで取得する", () => {
     // 取得順: BRAVE_SEARCH_API_KEY, DEEPSEEK_API_KEY, GH_TOKEN, JINA_API_KEY,
     //        LLM_API_KEY, OPENCODE_API_KEY, OPENROUTER_API_KEY,
-    //        XIAOMI_TOKEN_PLAN_SGP_API_KEY
+    //        QWEN_TOKEN_PLAN_API_KEY, XIAOMI_TOKEN_PLAN_SGP_API_KEY
     const exec = makeExecMock([
       "brave-val",
       "sk-ds",
@@ -537,6 +538,7 @@ describe("loadCredentials", () => {
       "sk-llm",
       "sk-oc",
       "sk-or",
+      "qwen-888",
       "xmi-777",
     ]);
     const creds = loadCredentials(exec);
@@ -547,6 +549,7 @@ describe("loadCredentials", () => {
     assert.equal(creds.LLM_API_KEY, "sk-llm");
     assert.equal(creds.OPENCODE_API_KEY, "sk-oc");
     assert.equal(creds.OPENROUTER_API_KEY, "sk-or");
+    assert.equal(creds.QWEN_TOKEN_PLAN_API_KEY, "qwen-888");
     assert.equal(creds.XIAOMI_TOKEN_PLAN_SGP_API_KEY, "xmi-777");
   });
 
@@ -560,8 +563,8 @@ describe("loadCredentials", () => {
       // 5 番目(LLM_API_KEY)だけ空文字を返すモック
       // BRAVE_SEARCH_API_KEY, DEEPSEEK_API_KEY, GH_TOKEN, JINA_API_KEY,
       // LLM_API_KEY, OPENCODE_API_KEY, OPENROUTER_API_KEY,
-      // XIAOMI_TOKEN_PLAN_SGP_API_KEY
-      const exec = makeExecMock(["v0", "v1", "v2", "v3", "", "v5", "v6", "v7"]);
+      // QWEN_TOKEN_PLAN_API_KEY, XIAOMI_TOKEN_PLAN_SGP_API_KEY
+      const exec = makeExecMock(["v0", "v1", "v2", "v3", "", "v5", "v6", "v7", "v8"]);
       const creds = loadCredentials(exec);
       // 例外を投げない
       assert.equal(creds.LLM_API_KEY, undefined, "LLM_API_KEY は undefined");
@@ -579,7 +582,7 @@ describe("loadCredentials", () => {
 
   it("CREDENTIAL_SOURCES の name と Credentials のキーが一致する", () => {
     // 型安全性の構造的保証: 配列に新エントリ追加で型も拡張される
-    const exec = makeExecMock(["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8"]);
+    const exec = makeExecMock(["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9"]);
     const creds = loadCredentials(exec);
     for (const src of CREDENTIAL_SOURCES) {
       assert.ok(src.name in creds, `${src.name} が creds に存在する`);

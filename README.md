@@ -54,6 +54,7 @@ container images | grep pi-sandbox
 | `BRAVE_SEARCH_API_KEY` | macOS Keychain |
 | `DEEPSEEK_API_KEY` | macOS Keychain |
 | `XIAOMI_TOKEN_PLAN_SGP_API_KEY` | macOS Keychain |
+| `QWEN_TOKEN_PLAN_API_KEY` | macOS Keychain |
 | `OPENCODE_API_KEY` | macOS Keychain |
 | `OPENROUTER_API_KEY` | macOS Keychain |
 | `LLM_API_KEY` | macOS Keychain |
