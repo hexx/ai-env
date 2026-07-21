@@ -5,8 +5,9 @@
 # Node 24 は Active LTS (2026-06 時点)。メジャーバージョンを明示固定して再現性を確保。
 FROM node:24-trixie-slim
 
-# デフォルトエディタの設定
-ENV EDITOR=nano
+# Playwrightブラウザの共有インストールパスとデフォルトエディタの設定
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    EDITOR=nano
 
 # =========================================================
 # 1. システムパッケージとツールのインストール
@@ -52,15 +53,28 @@ RUN curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv-install.sh \
 # 必須npmパッケージのグローバルインストール。
 # いずれも @latest を指定し、ビルドごとに最新版を取得する。
 # - pi-coding-agent / open-code-review は個人開発パッケージ
+# - playwright はバージョン固定すると依存解決の兼ね合いでビルドが
+#   失敗する場合があるため @latest
 # - pm2 は herdr-socat プロセスの管理に使用
 # - --no-cache でレイヤにnpmキャッシュを残さない(イメージサイズ削減)
 # ARG CACHEBUST を変更するとこの行以降のレイヤーが再実行される。
 ARG CACHEBUST=1
 RUN npm install -g --no-cache \
+        playwright@latest \
         @earendil-works/pi-coding-agent@latest \
         @alibaba-group/open-code-review@latest \
         hunkdiff@latest \
         pm2@latest
+
+# Playwrightブラウザ本体と依存ライブラリのインストール。
+# パーミッションは 755 とし、pi ユーザーがブラウザバイナリを実行できるが
+# 改ざんできないように。所有者は root のままにする。
+# --with-deps は内部で apt-get update/install を実行するため、実行後に
+# apt のリスト/キャッシュと一時ファイルを削除してイメージサイズを削減する。
+RUN npx playwright install --with-deps \
+    && chmod -R 755 /ms-playwright \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /root/.cache /tmp/* /var/tmp/*
 
 # =========================================================
 # 3. ctx.rs のインストール
@@ -81,7 +95,10 @@ RUN groupadd -r pi && useradd -r -m -g pi pi
 WORKDIR /workspace
 
 # pi-coding-agent を最新状態へアップデート。
-RUN pi update --all
+# 実行ユーザーは pi（HOME=/home/pi）のため root のキャッシュは実行時に不要。
+# イメージサイズ削減のためキャッシュと一時ファイルを削除する。
+RUN pi update --all \
+    && rm -rf /root/.cache /root/.npm /tmp/* /var/tmp/*
 
 USER pi
 
@@ -91,7 +108,8 @@ USER pi
 # herdr 公式のインストール方法に従っているため、本 Dockerfile ではチェックサム
 # 検証を追加できない。将来的にパッケージマネージャー対応があれば移行推奨。
 RUN curl -fsSL https://herdr.dev/install.sh | sh \
-    && curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh
+    && curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh \
+    && rm -rf /home/pi/.cache /tmp/*
 
 # =========================================================
 # 5. ユーザー固有の設定とエントリーポイント
