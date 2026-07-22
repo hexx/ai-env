@@ -35,5 +35,8 @@ coverage/
 .cache/
 .tmp/
 
+# ローカル実行時生成物（コンテナ起動スクリプトが作成する herdr / rtk 設定など）
+.config/
+
 # pi agent skills
 .pi/
