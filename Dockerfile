@@ -120,7 +120,11 @@ USER pi
 # herdr.dev のエンドポイントが改ざんされた場合に任意コードが実行される可能性あり。
 # herdr 公式のインストール方法に従っているため、本 Dockerfile ではチェックサム
 # 検証を追加できない。将来的にパッケージマネージャー対応があれば移行推奨。
+# rtk も同様に master の install.sh を直接実行する（バージョン無固定）。herdr と同種の
+# サプライチェーンリスクを認識した上で、最新版のフィルタ改善を追うため意図的に採用している。
+# 詳細: docs/adr/0001-rtk-reintroduction.md
 RUN curl -fsSL https://herdr.dev/install.sh | sh \
+    && curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh \
     && rm -rf /home/pi/.cache /tmp/*
 
 # =========================================================
