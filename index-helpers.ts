@@ -315,11 +315,24 @@ export const loadCredentials = (exec: ExecFn = execFileSync as ExecFn): PartialC
 export const redactSecrets = (args: string[]): string[] =>
   args.map((arg) => arg.replace(SECRET_ENV_PATTERN, "--env=$<key>=***"));
 
+// herdr 0.8.0 以降、フルライフサイクル統合（pi 等）の状態報告は
+// Agent Presence（ペインで agent が起動中とサーバーが認識する状態）の確立が前提。
+// Docker 内で動く agent はプロセス名検出が効かないため、ホスト herdr は
+// プロセスの環境変数 HERDR_AGENT=<agent> を検出経路として使う（ADR 0002）。
+// pi を起動するモード（--bash 以外）ではこのヒントを付与し、--bash では
+// 付与しない（コンテナ内で別 agent を動かす自由を維持するため）。
+export const buildContainerProcessEnv = (
+  bashMode: boolean,
+  base: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv =>
+  bashMode ? base : { ...base, HERDR_AGENT: "pi" };
+
 export const runContainer = (
   args: string[],
+  env: NodeJS.ProcessEnv,
   spawn: typeof spawnSync = spawnSync,
 ): number => {
-  const result = spawn("container", args, { stdio: "inherit" });
+  const result = spawn("container", args, { env, stdio: "inherit" });
   if (result.error) {
     console.error("container の実行に失敗しました:", result.error.message);
     return EXIT_ERROR;
@@ -404,7 +417,7 @@ export const findContainerByLabel = (
   }
 };
 
-export const attachToContainer = (projectName: string): number => {
+export const attachToContainer = (projectName: string, env: NodeJS.ProcessEnv): number => {
   const label = `ai-env.project=${projectName}`;
   const containerId = findContainerByLabel(label);
   if (!containerId) {
@@ -415,12 +428,13 @@ export const attachToContainer = (projectName: string): number => {
   }
   const args = buildAttachArgs(containerId);
   console.error(`$ container ${args.join(" ")}`);
-  return runContainer(args);
+  return runContainer(args, env);
 };
 
 export const runContainerCommand = (ctx: RunContext): number => {
+  const env = buildContainerProcessEnv(ctx.bashMode);
   if (ctx.attachMode) {
-    return attachToContainer(ctx.hostProjectName);
+    return attachToContainer(ctx.hostProjectName, env);
   }
   const envArgs = buildEnvArgs({
     credentials: ctx.credentials,
@@ -445,7 +459,7 @@ export const runContainerCommand = (ctx: RunContext): number => {
   });
   const containerArgs = buildContainerArgs(envArgs, volumeArgs, initScript, ctx.hostProjectName);
   console.error(`$ container ${redactSecrets(containerArgs).join(" ")}`);
-  return runContainer(containerArgs);
+  return runContainer(containerArgs, env);
 };
 
 export const prepareEnvironment = (params: {
