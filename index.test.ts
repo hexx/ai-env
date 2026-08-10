@@ -23,6 +23,7 @@ import {
   buildAttachArgs,
   buildContainerArgs,
   buildContainerName,
+  buildContainerProcessEnv,
   buildEnvArgs,
   buildVolumeArgs,
   findContainerByLabel,
@@ -672,7 +673,7 @@ describe("runContainer", () => {
       status: 0,
       signal: null,
     })) as unknown as typeof import("node:child_process").spawnSync;
-    assert.equal(runContainer(["run"], spawn), 0);
+    assert.equal(runContainer(["run"], process.env, spawn), 0);
   });
 
   it("status が null で signal があれば EXIT_ERROR を返す", () => {
@@ -685,7 +686,7 @@ describe("runContainer", () => {
       status: null,
       signal: "SIGTERM",
     })) as unknown as typeof import("node:child_process").spawnSync;
-    assert.equal(runContainer(["run"], spawn), 1);
+    assert.equal(runContainer(["run"], process.env, spawn), 1);
   });
 
   it("error プロパティを含む結果を返したら EXIT_ERROR を返す", () => {
@@ -702,6 +703,52 @@ describe("runContainer", () => {
         error: err,
       };
     }) as unknown as typeof import("node:child_process").spawnSync;
-    assert.equal(runContainer(["run"], spawn), 1);
+    assert.equal(runContainer(["run"], process.env, spawn), 1);
+  });
+
+  it("spawn に env が渡される(HERDR_AGENT ヒントが伝播する)", () => {
+    let capturedOptions: { env?: NodeJS.ProcessEnv } | undefined;
+    const spawn = ((
+      _file: string,
+      _args: string[],
+      options: { env?: NodeJS.ProcessEnv },
+    ) => {
+      capturedOptions = options;
+      return {
+        pid: 1,
+        output: [],
+        stdout: Buffer.from(""),
+        stderr: Buffer.from(""),
+        status: 0,
+        signal: null,
+      };
+    }) as unknown as typeof import("node:child_process").spawnSync;
+    const env = { ...process.env, HERDR_AGENT: "pi" };
+    assert.equal(runContainer(["run"], env, spawn), 0);
+    assert.equal(capturedOptions?.env?.HERDR_AGENT, "pi");
+  });
+});
+
+// ===== buildContainerProcessEnv (HERDR_AGENT ヒント) =====
+
+describe("buildContainerProcessEnv", () => {
+  it("非 bash モードでは HERDR_AGENT=pi が付与される", () => {
+    const base = { PATH: "/bin", HOME: "/home/pi" };
+    const env = buildContainerProcessEnv(false, base);
+    assert.equal(env.HERDR_AGENT, "pi");
+    assert.equal(env.PATH, "/bin");
+  });
+
+  it("bash モードでは HERDR_AGENT が付与されない(既存 env をそのまま返す)", () => {
+    const base = { PATH: "/bin" };
+    const env = buildContainerProcessEnv(true, base);
+    assert.equal(env.HERDR_AGENT, undefined);
+    assert.equal(env, base);
+  });
+
+  it("デフォルトでは process.env をベースにする", () => {
+    const env = buildContainerProcessEnv(false);
+    assert.equal(env.HERDR_AGENT, "pi");
+    assert.equal(env.PATH, process.env.PATH);
   });
 });
