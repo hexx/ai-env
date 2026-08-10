@@ -49,6 +49,8 @@ export interface RunContext {
   model: string | undefined;
   provider: string | undefined;
   resume: boolean;
+  // CLI の --session <id> で直接指定された明示セッション。
+  session: string | undefined;
   credentials: PartialCredentials;
   herdrPaneId: string;
   home: string;
@@ -334,6 +336,27 @@ export const runContainer = (
 export const isMacOS = (getPlatform: () => NodeJS.Platform = platform): boolean =>
   getPlatform() === "darwin";
 
+// CLI フラグの組み合わせ制約を検証する。
+// 違反時はエラーメッセージ文字列、問題なければ undefined を返す。
+// index.ts の main() から呼び出し、メッセージを stderr に出力して exit 1 する。
+// ルール:
+//   - --session はセッション再開を内包するため --resume と排他。
+//   - --attach は pi を起動しないため --bash / --resume / --session と排他。
+export const validateFlagCombination = (params: {
+  attach: boolean;
+  bash: boolean;
+  resume: boolean;
+  session: boolean;
+}): string | undefined => {
+  if (params.resume && params.session) {
+    return "--session はセッション再開を内包するため、--resume と同時に指定できません。'ai-env --session <id>' を使用してください。";
+  }
+  if (params.attach && (params.bash || params.resume || params.session)) {
+    return "--attach は --bash / --resume / --session と同時に指定できません。";
+  }
+  return undefined;
+};
+
 export const buildContainerName = (projectName: string): string =>
   `ai-env-${projectName}`;
 
@@ -413,6 +436,7 @@ export const runContainerCommand = (ctx: RunContext): number => {
     cliApiKeyEnv: ctx.apiKeyEnv,
     cliModel: ctx.model,
     cliProvider: ctx.provider,
+    cliSession: ctx.session,
     defaultApiKeyEnv: ctx.profile.apiKeyEnv,
     defaultModel: ctx.profile.model,
     defaultProvider: ctx.profile.provider,
@@ -431,6 +455,7 @@ export const prepareEnvironment = (params: {
   model: string | undefined;
   provider: string | undefined;
   resume: boolean;
+  session: string | undefined;
 }): RunContext => {
   const credentials = loadCredentials();
   const home = requireEnv("HOME");
@@ -448,6 +473,7 @@ export const prepareEnvironment = (params: {
     model: params.model,
     provider: params.provider,
     resume: params.resume,
+    session: params.session,
     credentials,
     herdrPaneId,
     home,

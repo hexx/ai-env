@@ -488,6 +488,120 @@ describe("buildInitScript - CLI オーバーライド (CLI > Project > Profile)"
   });
 });
 
+// ===== --session (明示セッション) =====
+
+// --session <id> は CLI からセッション ID を直接指定して既存セッションを再開する
+// 機能。--resume と排他(--session は再開を内包)のため、デフォルト起動モードの
+// case 解決に cliSession として渡される。provider / model / apiKeyEnv は従来どおり
+// CLI > Project > Profile の優先順位で解決する。
+
+describe("buildInitScript - --session (明示セッション)", () => {
+  it("デフォルト起動 + cliSession で case に --session <id> が含まれる", () => {
+    const script = buildInitScript({
+      cliSession: "019fe743-77fc-7ad5-82dd-4f64e7c64517",
+      defaultApiKeyEnv: undefined,
+      defaultModel: undefined,
+      defaultProvider: undefined,
+      projects: {
+        pi: {
+          apiKeyEnv: "LLM_API_KEY",
+          model: "deepseek-v4-flash:xhigh",
+          provider: "opencode-go",
+          session: "019f0b62-a4db-75ad-af9f-d78d43604605",
+        },
+      },
+    });
+    assertShellSyntax(script);
+    const caseLine = findDefaultCaseLine(script, "pi");
+    assert.ok(caseLine, "pi の case 行が存在する");
+    assert.match(caseLine, /--provider opencode-go/);
+    assert.match(caseLine, /--model deepseek-v4-flash:xhigh/);
+    assert.match(caseLine, /--api-key "\$LLM_API_KEY"/);
+    // 明示セッションが --session として渡る(プロジェクト設定の session を上書き)。
+    assert.match(caseLine, /--session 019fe743-77fc-7ad5-82dd-4f64e7c64517/);
+    assert.doesNotMatch(caseLine, /019f0b62-a4db-75ad-af9f-d78d43604605/);
+  });
+
+  it("cliSession はプロジェクト設定の session より優先される", () => {
+    const script = buildInitScript({
+      cliSession: "019fe743-77fc-7ad5-82dd-4f64e7c64517",
+      defaultApiKeyEnv: undefined,
+      defaultModel: undefined,
+      defaultProvider: undefined,
+      projects: {
+        pi: {
+          session: "019f0b62-a4db-75ad-af9f-d78d43604605",
+        },
+      },
+    });
+    assertShellSyntax(script);
+    const caseLine = findDefaultCaseLine(script, "pi");
+    assert.ok(caseLine);
+    assert.match(caseLine, /--session 019fe743-77fc-7ad5-82dd-4f64e7c64517/);
+    assert.doesNotMatch(caseLine, /019f0b62-a4db-75ad-af9f-d78d43604605/);
+  });
+
+  it("未知プロジェクト用 *) 分岐にも cliSession が --session として渡る", () => {
+    const script = buildInitScript({
+      cliSession: "019fe743-77fc-7ad5-82dd-4f64e7c64517",
+      defaultApiKeyEnv: "PROFILE_KEY",
+      defaultModel: "claude-3-5-sonnet-20241022",
+      defaultProvider: "anthropic",
+      projects: {
+        known: {
+          session: "019ea76f-92d3-7442-a675-b79162e7f1c7",
+        },
+      },
+    });
+    assertShellSyntax(script);
+    const body = extractDefaultCaseBody(script);
+    assert.match(
+      body,
+      /^\s*\*\) pi --provider anthropic --model claude-3-5-sonnet-20241022 --session 019fe743-77fc-7ad5-82dd-4f64e7c64517 ;;$/m,
+    );
+  });
+
+  it("cliSession を渡さなければ従来どおり --session を含まない(新規セッション)", () => {
+    const script = buildInitScript({
+      defaultApiKeyEnv: undefined,
+      defaultModel: undefined,
+      defaultProvider: undefined,
+      projects: {
+        pi: {
+          session: "019f0b62-a4db-75ad-af9f-d78d43604605",
+        },
+      },
+    });
+    assertShellSyntax(script);
+    const caseLine = findDefaultCaseLine(script, "pi");
+    assert.ok(caseLine);
+    assert.doesNotMatch(caseLine, /--session/);
+  });
+
+  it("--resume モードでは cliSession は pi-resume 関数に反映されない(ワンショット)", () => {
+    const script = buildInitScript({
+      cliSession: "019fe743-77fc-7ad5-82dd-4f64e7c64517",
+      defaultApiKeyEnv: undefined,
+      defaultModel: undefined,
+      defaultProvider: undefined,
+      projects: {
+        pi: {
+          session: "019f0b62-a4db-75ad-af9f-d78d43604605",
+        },
+      },
+      resume: true,
+    });
+    assertShellSyntax(script);
+    // pi-resume 関数は projects 設定の session を使う(--session は CLI と排他なので
+    // 関数に焼き込まず、コンテナ内で pi-resume しても設定どおりのセッションを再開する)。
+    const cases = extractPiResumeCases(script);
+    const piCase = cases.find((line) => line.includes("pi)"));
+    assert.ok(piCase, "pi の case 行が pi-resume 関数内に存在する");
+    assert.match(piCase, /--session 019f0b62-a4db-75ad-af9f-d78d43604605/);
+    assert.doesNotMatch(piCase, /019fe743-77fc-7ad5-82dd-4f64e7c64517/);
+  });
+});
+
 // ===== --bash モードの CLI オーバーライド =====
 
 describe("buildInitScript - --bash モードで CLI オプションを env 変数として export", () => {
@@ -520,6 +634,39 @@ describe("buildInitScript - --bash モードで CLI オプションを env 変�
     assert.match(script, /^export PI_PROVIDER="opencode-go"$/m);
     assert.match(script, /^export PI_MODEL="deepseek-v4-flash:xhigh"$/m);
     assert.match(script, /^export PI_API_KEY_ENV="WORK_API_KEY"$/m);
+  });
+
+  it("--session を指定すると PI_SESSION として export される", () => {
+    const script = buildInitScript({
+      bashMode: true,
+      cliSession: "019fe743-77fc-7ad5-82dd-4f64e7c64517",
+      defaultApiKeyEnv: undefined,
+      defaultModel: undefined,
+      defaultProvider: undefined,
+      projects: {},
+    });
+    assertShellSyntax(script);
+    assert.match(script, /^export PI_SESSION="019fe743-77fc-7ad5-82dd-4f64e7c64517"$/m);
+    assert.match(script, /\nexec \/bin\/bash$/m);
+  });
+
+  it("4 つの CLI オプション全て指定すると 4 つの env 変数として export される", () => {
+    const script = buildInitScript({
+      bashMode: true,
+      cliApiKeyEnv: "WORK_API_KEY",
+      cliModel: "deepseek-v4-flash:xhigh",
+      cliProvider: "opencode-go",
+      cliSession: "019fe743-77fc-7ad5-82dd-4f64e7c64517",
+      defaultApiKeyEnv: undefined,
+      defaultModel: undefined,
+      defaultProvider: undefined,
+      projects: {},
+    });
+    assertShellSyntax(script);
+    assert.match(script, /^export PI_PROVIDER="opencode-go"$/m);
+    assert.match(script, /^export PI_MODEL="deepseek-v4-flash:xhigh"$/m);
+    assert.match(script, /^export PI_API_KEY_ENV="WORK_API_KEY"$/m);
+    assert.match(script, /^export PI_SESSION="019fe743-77fc-7ad5-82dd-4f64e7c64517"$/m);
   });
 
   it("CLI オプションが何も指定されなければ export 行は出力されない", () => {

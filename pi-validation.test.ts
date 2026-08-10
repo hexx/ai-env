@@ -26,6 +26,18 @@ describe("validateCliOverrides", () => {
     });
   });
 
+  it("session を指定すればそのまま返す(部分 ID も許容)", () => {
+    const result = validateCliOverrides({
+      session: "019fe743-77fc-7ad5-82dd-4f64e7c64517",
+    });
+    assert.deepEqual(result, {
+      session: "019fe743-77fc-7ad5-82dd-4f64e7c64517",
+    });
+    // pi の --session はプレフィックス一致に対応しているため部分 ID も通す。
+    const partial = validateCliOverrides({ session: "019fe743" });
+    assert.equal(partial.session, "019fe743");
+  });
+
   it("model にコロン区切り書式 (thinkingLevel) を許容する", () => {
     const result = validateCliOverrides({ model: "deepseek-v4-flash:xhigh" });
     assert.equal(result.model, "deepseek-v4-flash:xhigh");
@@ -56,6 +68,27 @@ describe("validateCliOverrides", () => {
     assert.throws(
       () => validateCliOverrides({ apiKeyEnv: "" }),
       /apiKeyEnv/,
+    );
+  });
+
+  it("session にシェルメタ文字を含む値は拒否する", () => {
+    assert.throws(
+      () => validateCliOverrides({ session: "019fe743;rm -rf /" }),
+      /session/,
+    );
+  });
+
+  it("session に空白を含む値は拒否する", () => {
+    assert.throws(
+      () => validateCliOverrides({ session: "019f e743" }),
+      /session/,
+    );
+  });
+
+  it("空文字の session は拒否する", () => {
+    assert.throws(
+      () => validateCliOverrides({ session: "" }),
+      /session/,
     );
   });
 });
