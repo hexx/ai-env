@@ -198,6 +198,26 @@ const generateCommonScript = (piResumeFunc: string): string => {
   });
 };
 
+// ホスト herdr の Agent Presence 確立を待つシェルブロック（resume / default モード用）。
+// コンテナ起動直後は herdr サーバーがコンテナプロセス（HERDR_AGENT ヒント）を検出する前で、
+// pi の session_start 報告（pane.report_agent_session）が無視されると、サーバーのセッション
+// 参照が旧セッションに固定されたまま状態報告が全て拒否され、サイドバーが更新されなくなる
+// （herdr 0.8.0 の回帰、詳細は docs/adr/0003-herdr-session-reanchor-race.md）。
+// --bash モードでは pi を自動起動しないため待機しない（自己修復パッチは適用される）。
+const HERDR_PRESENCE_WAIT = `# ホスト herdr の Agent Presence 確立を待機（最大 10 秒、ADR 0003）
+# pi の session_start 報告が presence 未確立で無視されないようにする。
+# 確立しなくても pi の起動自体は続行する（agent_start 時の自己修復パッチが補完する）。
+if [ -n "\${HERDR_PANE_ID:-}" ]; then
+  timeout 10 bash -c '
+    for _ in $(seq 1 10); do
+      if timeout 2 herdr agent explain "$HERDR_PANE_ID" >/dev/null 2>&1; then
+        break
+      fi
+      sleep 1
+    done
+  ' || true
+fi`;
+
 // コンテナ起動直後にコンテナ内で実行する初期化スクリプトを生成。
 // SSH 鍵セットアップ → pm2 管理下の socat ブリッジ → pi-resume 関数定義 → pi 起動の順。
 // pi 終了時に pm2 をクリーンアップしてコンテナを終了する。
@@ -271,6 +291,7 @@ export const buildInitScript = (params: {
     return renderTemplate(template, {
       COMMON_SCRIPT: commonScript,
       PI_RESUME_FUNC: piResumeFunc,
+      HERDR_PRESENCE_WAIT,
     });
   }
   // デフォルト起動(--resume / --bash なし): pi-resume と同じ case 解決をインライン化。
@@ -294,5 +315,6 @@ export const buildInitScript = (params: {
   return renderTemplate(template, {
     COMMON_SCRIPT: commonScript,
     CASE_BODY: caseBody,
+    HERDR_PRESENCE_WAIT,
   });
 };

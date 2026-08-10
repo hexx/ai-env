@@ -5,6 +5,7 @@
 {{COMMON_SCRIPT}}
 
 {{PI_RESUME_FUNC}}
+{{HERDR_PRESENCE_WAIT}}
 pi-resume
 rc=$?
 pm2 kill
