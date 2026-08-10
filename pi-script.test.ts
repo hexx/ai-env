@@ -701,5 +701,55 @@ describe("buildInitScript - --bash モードで CLI オプションを env 変�
   });
 });
 
+// ===== herdr セッション再アンカー競合への対処（ADR 0003） =====
+
+describe("buildInitScript - herdr セッション再アンカー競合への対処", () => {
+  const baseParams = {
+    defaultApiKeyEnv: undefined,
+    defaultModel: undefined,
+    defaultProvider: undefined,
+    projects: {},
+  };
+
+  it("デフォルト起動では pi 起動前に Agent Presence 待機ブロックが入る", () => {
+    const script = buildInitScript(baseParams);
+    assertShellSyntax(script);
+    assert.match(script, /Agent Presence 確立を待機/);
+    assert.match(script, /herdr agent explain/);
+    // 待機ブロックが pi 起動 (case 解決) より前にあること。
+    assert.ok(
+      script.indexOf("herdr agent explain") < script.indexOf('project="${HOST_PROJECT_NAME}"'),
+    );
+  });
+
+  it("--resume モードでも pi 起動前に Agent Presence 待機ブロックが入る", () => {
+    const script = buildInitScript({ ...baseParams, resume: true });
+    assertShellSyntax(script);
+    assert.match(script, /herdr agent explain/);
+    assert.ok(script.indexOf("herdr agent explain") < script.indexOf("pi-resume\n"));
+  });
+
+  it("--bash モードでは Agent Presence 待機ブロックが入らない", () => {
+    const script = buildInitScript({ ...baseParams, bashMode: true });
+    assertShellSyntax(script);
+    assert.doesNotMatch(script, /Agent Presence 確立を待機/);
+    assert.doesNotMatch(script, /herdr agent explain/);
+  });
+
+  it("全モードで herdr-agent-state.ts への自己修復パッチが含まれる", () => {
+    const script = buildInitScript(baseParams);
+    assertShellSyntax(script);
+    assert.match(script, /HERDR_INTEGRATION_VERSION=8/);
+    assert.match(script, /void reportSession\("resume"\)/);
+    assert.match(script, /sed -i 's\|void reportSession\(\);\|void reportSession\("resume"\);\|'/);
+  });
+
+  it("bash モードでも自己修復パッチは含まれる（後で pi を手動起動した場合に備える）", () => {
+    const script = buildInitScript({ ...baseParams, bashMode: true });
+    assertShellSyntax(script);
+    assert.match(script, /HERDR_INTEGRATION_VERSION=8/);
+  });
+});
+
 // ===== validateCliOverrides =====
 
