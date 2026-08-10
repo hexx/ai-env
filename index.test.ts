@@ -35,6 +35,7 @@ import {
   redactSecrets,
   requireEnv,
   runContainer,
+  validateFlagCombination,
   type Credentials,
 } from "./index-helpers";
 import { type ProfileConfig } from "./pi-types";
@@ -287,6 +288,57 @@ describe("buildEnvArgs", () => {
     });
     const profileArg = envArgs.find((a) => a.startsWith("--env=AI_ENV_PROFILE="));
     assert.equal(profileArg, "--env=AI_ENV_PROFILE=pi-work");
+  });
+});
+
+// ===== validateFlagCombination =====
+
+describe("validateFlagCombination", () => {
+  it("単独フラグはすべて許可する", () => {
+    assert.equal(
+      validateFlagCombination({ attach: false, bash: false, resume: false, session: false }),
+      undefined,
+    );
+    assert.equal(
+      validateFlagCombination({ attach: false, bash: true, resume: false, session: false }),
+      undefined,
+    );
+    assert.equal(
+      validateFlagCombination({ attach: false, bash: false, resume: true, session: false }),
+      undefined,
+    );
+    assert.equal(
+      validateFlagCombination({ attach: false, bash: false, resume: false, session: true }),
+      undefined,
+    );
+  });
+
+  it("--resume と --session の同時指定はエラー(--session は再開を内包するため)", () => {
+    const error = validateFlagCombination({ attach: false, bash: false, resume: true, session: true });
+    assert.match(error ?? "", /--resume/);
+    assert.match(error ?? "", /--session/);
+  });
+
+  it("--attach と --bash / --resume / --session の同時指定はエラー", () => {
+    assert.match(
+      validateFlagCombination({ attach: true, bash: true, resume: false, session: false }) ?? "",
+      /--attach/,
+    );
+    assert.match(
+      validateFlagCombination({ attach: true, bash: false, resume: true, session: false }) ?? "",
+      /--attach/,
+    );
+    assert.match(
+      validateFlagCombination({ attach: true, bash: false, resume: false, session: true }) ?? "",
+      /--attach/,
+    );
+  });
+
+  it("--attach 単独なら許可する", () => {
+    assert.equal(
+      validateFlagCombination({ attach: true, bash: false, resume: false, session: false }),
+      undefined,
+    );
   });
 });
 

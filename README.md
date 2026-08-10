@@ -91,7 +91,7 @@ container images | grep pi-sandbox
 ```
 
 * `profiles`: 仕事用 / プライベート用など用途別のプロファイル。各プロファイルに OCR 全体設定を記述。オプションで `provider` と `model` を指定でき、プロジェクト側で未指定の場合のデフォルト値として使用される。
-* `projects`: pi セッション再開用のプロジェクト定義。値は文字列(セッション ID のみ)とオブジェクト(`session` 必須、`provider` / `model` / `apiKeyEnv` 任意)の両方を受け付ける。オブジェクト形式では `pi-resume` 実行時に `--provider <p> --model <m> --api-key "$<env>" --session <s>` の順で組み立てる。思考レベルなど pi 側のオプションは明示的に渡さず、`pi` コマンドのデフォルト挙動に委ねる。`apiKeyEnv` はコンテナ内の API キー用環境変数名(例: `LLM_API_KEY`)で、生成シェルでは `$LLM_API_KEY` としてランタイム展開される。`ai-env` (--resume / --bash なし) で起動した場合、`projects` 内の `provider` / `model` / `apiKeyEnv` が同じ優先順位で `pi` に反映される(**`session` は引き継がれず、常に新しいセッションで pi が起動する**。セッションを再開したい場合は `--resume` を指定する)。
+* `projects`: pi セッション再開用のプロジェクト定義。値は文字列(セッション ID のみ)とオブジェクト(`session` 必須、`provider` / `model` / `apiKeyEnv` 任意)の両方を受け付ける。オブジェクト形式では `pi-resume` 実行時に `--provider <p> --model <m> --api-key "$<env>" --session <s>` の順で組み立てる。思考レベルなど pi 側のオプションは明示的に渡さず、`pi` コマンドのデフォルト挙動に委ねる。`apiKeyEnv` はコンテナ内の API キー用環境変数名(例: `LLM_API_KEY`)で、生成シェルでは `$LLM_API_KEY` としてランタイム展開される。`ai-env` (--resume / --bash なし) で起動した場合、`projects` 内の `provider` / `model` / `apiKeyEnv` が同じ優先順位で `pi` に反映される(**`session` は渡されず、常に新しいセッションで pi が起動する**。セッションを再開したい場合は `--resume`(プロジェクトセッション)または `--session <id>`(明示セッション)を指定する)。
 * `OCR_LLM_TOKEN_KEY`: CREDENTIAL_SOURCES のキー名を指定。`credentials[OCR_LLM_TOKEN_KEY]` の値が `--env=OCR_LLM_TOKEN=...` に注入される。
 
 ### CLI オプション
@@ -101,17 +101,18 @@ container images | grep pi-sandbox
 | オプション | 説明 |
 | --- | --- |
 | `--bash` | pi を起動せず bash シェルのみ起動。 |
-| `--resume` | `pi-projects.json` の `session` を引き継いで `pi-resume` 経由で `pi` を起動。 |
+| `--resume` | `pi-projects.json` の `session` を再開して `pi-resume` 経由で `pi` を起動。 |
+| `--session <id>` | `pi` の `--session` に渡すセッション ID(部分 ID 可)。`--resume` とは排他。`--bash` 時は `PI_SESSION` 環境変数として export。 |
 | `--provider <p>` | `pi` の `--provider` を上書き。`--bash` 時は `PI_PROVIDER` 環境変数として export。 |
 | `--model <m>` | `pi` の `--model` を上書き(`model:thinkingLevel` 形式可)。`--bash` 時は `PI_MODEL` 環境変数として export。 |
 | `--api-key-env <envName>` | `pi` の `--api-key` で参照するコンテナ内環境変数名を上書き。`--bash` 時は `PI_API_KEY_ENV` 環境変数として export。 |
 
 値の優先順位は **CLI > Project > Profile**。
 
-* `ai-env` (デフォルト起動) と `ai-env --resume` の両方で、プロジェクト設定の `provider` / `model` / `apiKeyEnv` が `pi` に反映される。
-* `session` は `ai-env --resume`(と `pi-resume` シェル関数)でのみ `--session <id>` として渡される。デフォルト起動では渡されない(常に新しいセッションで `pi` が立ち上がる)。
+* `ai-env` (デフォルト起動) と `ai-env --resume` の両方で、プロジェクト設定の `provider` / `model` / `apiKeyEnv` が `pi` に反映される。`ai-env --session <id>` でも同様に反映される(セッションのみ CLI 指定で上書き)。
+* `session` は `ai-env --resume`(と `pi-resume` シェル関数)または `ai-env --session <id>`(CLI 直接指定)でのみ `--session <id>` として渡される。デフォルト起動では渡されない(常に新しいセッションで `pi` が立ち上がる)。`--session <id>` はプロジェクト設定の session を上書きして 1 回だけ再開する(コンテナ内 `pi-resume` 関数には反映されない)。
 * プロジェクト未マッチ時 (`projects` に存在しないプロジェクト) は CLI > プロファイル の順でフォールバック。CLI 未指定ならプロファイルデフォルト、それも未指定ならフラグを出さない。
-* `ai-env --bash --provider X --model Y` でコンテナに入り、`pi --provider "$PI_PROVIDER" --model "$PI_MODEL"` のように env 変数を参照して pi を起動できる。
+* `ai-env --bash --provider X --model Y --session <id>` でコンテナに入り、`pi --provider "$PI_PROVIDER" --model "$PI_MODEL" --session "$PI_SESSION"` のように env 変数を参照して pi を起動できる。
 
 ### プロファイルの自動判別
 

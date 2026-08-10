@@ -80,15 +80,19 @@ export const toPlainObject = (
 
 // ===== CLI オプション検証 =====
 
-// CLI オプション (--provider / --model / --api-key-env) を既存の SAFE_*_PATTERN で検証する。
-// undefined は未指定としてそのまま返す。検証エラー時は Error を投げる。
+// CLI オプション (--provider / --model / --api-key-env / --session) を既存の
+// SAFE_*_PATTERN で検証する。undefined は未指定としてそのまま返す。
+// 検証エラー時は Error を投げる。
 // index.ts 側で parse 前に呼び、cli* 値を安全な形に正規化する用途を想定。
+// session は pi のセッション ID (部分 ID 可) であり、pi 自身の検証と同一文字セットの
+// SAFE_SHELL_PATTERN で検証する。
 export const validateCliOverrides = (params: {
   provider?: string;
   model?: string;
   apiKeyEnv?: string;
-}): { provider?: string; model?: string; apiKeyEnv?: string } => {
-  const result: { provider?: string; model?: string; apiKeyEnv?: string } = {};
+  session?: string;
+}): { provider?: string; model?: string; apiKeyEnv?: string; session?: string } => {
+  const result: { provider?: string; model?: string; apiKeyEnv?: string; session?: string } = {};
   if (params.provider !== undefined) {
     result.provider = requireSafeId({
       configPath: "<cli>",
@@ -114,6 +118,15 @@ export const validateCliOverrides = (params: {
       key: "--api-key-env",
       pattern: SAFE_ENV_NAME_PATTERN,
       rawValue: params.apiKeyEnv,
+    });
+  }
+  if (params.session !== undefined) {
+    result.session = requireSafeId({
+      configPath: "<cli>",
+      fieldName: "session",
+      key: "--session",
+      pattern: SAFE_SHELL_PATTERN,
+      rawValue: params.session,
     });
   }
   return result;

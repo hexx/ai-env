@@ -65,7 +65,7 @@ const buildOptionalFlag = (name: string, value: string | undefined): string => {
 // pi に渡すフラグ文字列を組み立てる(provider / model / apiKeyEnv / sessionId)。
 // 空の値は省略。apiKeyEnv がある場合は --api-key "$ENV" 形式で展開し、
 // シェル実行時に $ENV が解決される。sessionId が指定された場合のみ
-// --session <id> を出力に含める(プロジェクト case のみ。*) 分岐では不要)。
+// --session <id> を出力に含める。
 // 値の優先順位解決(CLI > Project > Profile)は呼び出し側で行う。
 const buildPiFlags = (params: {
   provider: string | undefined;
@@ -90,10 +90,13 @@ const buildPiFlags = (params: {
 // 各プロジェクトの case ブランチ、*) ブランチともに「CLI > Project > Profile」の優先度。
 // ただし *) ブランチでは project 値が存在しないため「CLI > profile」となる。
 // 思考レベルなど pi 側オプションは明示的に渡さない(pi のデフォルトに委ねる)。
-// sessionId は「セッションを引き継ぐ」シナリオ(--resume / pi-resume 関数経由)でのみ
-// --session フラグとして組み立てる。デフォルト起動(ai-env)では新しいセッションで
-// pi を立ち上げたいので sessionId は渡さない。includeSession は省略時 true で
-// 後方互換を維持(既存呼び出しは pi-resume 関数用途なので true で正しい)。
+// sessionId は cliSession が指定されていればそれを優先し(--session は再開を内包)、
+// なければ includeSession が true のときだけ config.session を --session フラグに
+// 変換する。デフォルト起動(ai-env)では新しいセッションで pi を立ち上げたいので
+// sessionId は渡さない。includeSession は省略時 true で後方互換を維持
+// (既存呼び出しは pi-resume 関数用途なので true で正しい)。
+// cliSession は --resume と排他(--session 単体で再開を内包)のため、実際には
+// デフォルト起動(includeSession: false)でのみ渡される。
 export const generateCaseBody = (params: {
   projects: Record<string, ProjectConfig>;
   defaultProvider: string | undefined;
@@ -102,13 +105,16 @@ export const generateCaseBody = (params: {
   cliProvider: string | undefined;
   cliModel: string | undefined;
   cliApiKeyEnv: string | undefined;
+  // CLI の --session <id> で直接指定された明示セッション。
+  // 指定時はプロジェクト設定の session より優先して --session フラグに変換する。
+  cliSession?: string;
   // *) ブランチの挙動。
   //   true:  警告メッセージ + pi (引数なし)。pi-resume 関数の既存挙動を保持。
   //   false: CLI > profile のフォールバック値で pi を起動。ai-env デフォルト起動用。
   warnOnUnknown: boolean;
-  // プロジェクト case で --session <id> を含めるかどうか。
-  //   true:  pi-resume 関数用。sessionId を引き継ぐ。
-  //   false: デフォルト起動用。sessionId は引き継がない(新しいセッションで pi を起動)。
+  // プロジェクト case で config.session を --session <id> として組み立てるかどうか。
+  //   true:  pi-resume 関数用。プロジェクトセッションを再開する。
+  //   false: デフォルト起動用。config.session は使わない(新しいセッションで pi を起動)。
   // 省略時は true。
   includeSession?: boolean;
 }): string => {
@@ -120,18 +126,19 @@ export const generateCaseBody = (params: {
     cliProvider,
     cliModel,
     cliApiKeyEnv,
+    cliSession,
     warnOnUnknown,
     includeSession = true,
   } = params;
   const projectCases = Object.entries(projects)
     .map(([project, config]) => {
       // 優先度: CLI > project > profile。CLI で明示上書きが可能。
-      // sessionId は includeSession が true のときだけ --session フラグに変換する。
+      // sessionId は cliSession(明示セッション) > config.session(プロジェクトセッション)。
       const flags = buildPiFlags({
         provider: cliProvider ?? config.provider ?? defaultProvider,
         model: cliModel ?? config.model ?? defaultModel,
         apiKeyEnv: cliApiKeyEnv ?? config.apiKeyEnv ?? defaultApiKeyEnv,
-        sessionId: includeSession ? config.session : undefined,
+        sessionId: cliSession ?? (includeSession ? config.session : undefined),
       });
       return `    ${project}) pi ${flags} ;;`;
     })
@@ -146,10 +153,12 @@ export const generateCaseBody = (params: {
     // defaults: CLI > profile の優先度でフォールバック。
     // apiKeyEnv は *) 分岐では渡さない(pi-resume の `pi` 引数なし挙動と整合させ、
     // シェル関数未注入時の混乱を避けるため)。
+    // sessionId は cliSession のみ(未知プロジェクトは設定上のプロジェクトセッションを持たない)。
     const fallbackFlags = buildPiFlags({
       provider: cliProvider ?? defaultProvider,
       model: cliModel ?? defaultModel,
       apiKeyEnv: undefined,
+      sessionId: cliSession,
     });
     unknownBranch = fallbackFlags
       ? `    *) pi ${fallbackFlags} ;;`
@@ -202,6 +211,9 @@ export const buildInitScript = (params: {
   cliProvider?: string;
   cliModel?: string;
   cliApiKeyEnv?: string;
+  // CLI の --session <id> (明示セッション)。bash モードでは PI_SESSION として export、
+  // デフォルト起動では --session フラグとして pi に渡す。--resume とは排他。
+  cliSession?: string;
   bashMode?: boolean;
   resume?: boolean;
 }): string => {
@@ -213,6 +225,7 @@ export const buildInitScript = (params: {
     cliProvider,
     cliModel,
     cliApiKeyEnv,
+    cliSession,
     bashMode = false,
     resume = false,
   } = params;
@@ -242,6 +255,9 @@ export const buildInitScript = (params: {
     if (cliApiKeyEnv !== undefined) {
       exportLines.push(`export PI_API_KEY_ENV="${cliApiKeyEnv}"`);
     }
+    if (cliSession !== undefined) {
+      exportLines.push(`export PI_SESSION="${cliSession}"`);
+    }
     const exportBlock =
       exportLines.length > 0 ? `\n${exportLines.join("\n")}\n` : "";
     const template = loadTemplate("bash-mode.sh.template");
@@ -259,8 +275,9 @@ export const buildInitScript = (params: {
   }
   // デフォルト起動(--resume / --bash なし): pi-resume と同じ case 解決をインライン化。
   // プロジェクト側の provider / model / apiKeyEnv が反映され、未知プロジェクトでは
-  // CLI > profile のフォールバックで pi を起動する。sessionId は引き継がない
-  // (新しいセッションで pi を起動する)。セッションを再開したい場合は --resume を指定する。
+  // CLI > profile のフォールバックで pi を起動する。sessionId は cliSession 以外は
+  // 渡さない(新しいセッションで pi を起動する)。セッションを再開したい場合は
+  // --resume(プロジェクトセッション)または --session <id>(明示セッション)を指定する。
   const caseBody = generateCaseBody({
     projects,
     defaultProvider,
@@ -269,6 +286,7 @@ export const buildInitScript = (params: {
     cliProvider,
     cliModel,
     cliApiKeyEnv,
+    cliSession,
     includeSession: false,
     warnOnUnknown: false,
   });

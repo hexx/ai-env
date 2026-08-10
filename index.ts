@@ -7,6 +7,7 @@ import {
   isMacOS,
   prepareEnvironment,
   runContainerCommand,
+  validateFlagCombination,
 } from "./index-helpers";
 import { Command } from "commander";
 
@@ -19,6 +20,7 @@ interface CliOptions {
   model?: string;
   provider?: string;
   resume?: boolean;
+  session?: string;
 }
 
 // ===== メイン処理 =====
@@ -31,11 +33,17 @@ const main = (options: CliOptions): number => {
       );
       return EXIT_ERROR;
     }
-    // --attach と --bash / --resume は排他的
-    if (options.attach && (options.bash || options.resume)) {
-      console.error(
-        "--attach は --bash や --resume と同時に指定できません。",
-      );
+    // --session はセッション再開を内包、--attach は pi を起動しないため、
+    // それぞれ排他フラグとの組み合わせを検証する。
+    // 違反時は該当メッセージを stderr に出力して exit 1。
+    const combinationError = validateFlagCombination({
+      attach: options.attach ?? false,
+      bash: options.bash ?? false,
+      resume: options.resume ?? false,
+      session: options.session !== undefined,
+    });
+    if (combinationError) {
+      console.error(combinationError);
       return EXIT_ERROR;
     }
     // CLI オプションを SAFE_*_PATTERN で検証(設定ファイルと同一ルールで弾く)。
@@ -44,6 +52,7 @@ const main = (options: CliOptions): number => {
       apiKeyEnv: options.apiKeyEnv,
       model: options.model,
       provider: options.provider,
+      session: options.session,
     });
     return runContainerCommand(
       prepareEnvironment({
@@ -53,6 +62,7 @@ const main = (options: CliOptions): number => {
         model: validated.model,
         provider: validated.provider,
         resume: options.resume ?? false,
+        session: validated.session,
       }),
     );
   } catch (error) {
@@ -70,7 +80,11 @@ program
   .version("0.1.0")
   .option("--attach", "同じディレクトリで起動中のコンテナにアタッチする")
   .option("--bash", "pi を起動せずに bash シェルのみを起動する")
-  .option("--resume", "pi-projects.json のセッションを引き継いで起動する")
+  .option("--resume", "pi-projects.json のセッションを再開して pi を起動する")
+  .option(
+    "--session <id>",
+    "pi の --session フラグに渡すセッション ID(部分 ID 可、--resume とは排他、bash モードでは PI_SESSION env 変数として export)",
+  )
   .option(
     "--provider <provider>",
     "pi の --provider フラグに渡す値(bash モードでは PI_PROVIDER env 変数として export)",
