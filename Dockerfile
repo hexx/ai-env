@@ -13,6 +13,15 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
 # 1. システムパッケージとツールのインストール
 # =========================================================
 # 基本ツール、GitHub CLI、およびOpenSSHクライアントのインストール
+# gh は GitHub 公式 apt リポジトリ (cli.github.com/packages) からインストールする。
+# リポジトリ追加後に apt-get update を再実行しないと、apt はソースリストの変更を
+# 自動検出できないことがある(BuildKit のレイヤーではタイムスタンプ比較が機能せず
+# 自動 update が走らない)ため、Debian 側の古い gh がエラーなくインストールされて
+# しまう。例: gh 2.46.0 は gh pr edit が Projects classic 廃止の GraphQL エラーで
+# 壊れる。そのためリポジトリ追加後の明示的な update と、インストールされた gh が
+# 公式リポジトリ由来であることの検証をビルド時に行う。検証は --version の表記に
+# 依存せず、パッケージメタデータの Maintainer で判定する(公式は "GitHub"、
+# Debian パッケージは "Debian Go Packaging Team")。
 RUN apt-get update && apt-get install -y --no-install-recommends \
         wget \
         ca-certificates \
@@ -28,9 +37,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg > /etc/apt/keyrings/githubcli-archive-keyring.gpg \
     && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
+    && apt-get update \
     && apt-get install -y --no-install-recommends \
         gh \
         openssh-client \
+    && gh --version \
+    && dpkg-query -W -f='${Maintainer}\n' gh | grep -qi 'github' \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
