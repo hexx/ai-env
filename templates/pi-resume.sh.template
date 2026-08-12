@@ -1,7 +1,7 @@
 # pi-resume シェル関数定義
-# プロジェクト名に基づいて pi コマンドを起動する
+# プロジェクト名に基づいて pi コマンドを起動する(デフォルトはカレントディレクトリ名)
 pi-resume() {
-  local project="${1:-$HOST_PROJECT_NAME}"
+  local project="${1:-$(basename "$PWD")}"
   case "$project" in
 {{CASE_BODY}}
   esac

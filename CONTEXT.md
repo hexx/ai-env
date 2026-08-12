@@ -37,17 +37,21 @@ _Avoid_: 無視された報告（受理はされている）
 ## Sessions
 
 **Session**:
-pi の会話の単位。UUID で識別され（部分一致も可）、ホストの `~/.pi/agent/sessions/` に JSONL として保存される。ai-env は「新規セッションで pi を起動する（デフォルト起動）」か「既存セッションを再開する（--resume / --session）」のどちらかで pi を起動する。
+pi の会話の単位。UUID で識別され（部分一致も可）、ホストの `~/.pi/agent/sessions/` にセッション開始時の cwd ごとに JSONL として保存される。コンテナ内では cwd がプロジェクトごとに分かれているため（Project Directory）、セッションもプロジェクト単位で整理される。
 _Avoid_: チャット履歴, 会話ログ
 
-**Project Session**:
-`pi-projects.json` の `projects.<name>.session` に定義されたセッション。`--resume` で再開される。
-_Avoid_: 設定済みセッション, 保存セッション
+**Project Name**:
+ホストのカレントディレクトリ名。コンテナ内のマウント先ディレクトリ名（`/workspace/<プロジェクト名>`）と pi のセッション整理のキーになる。ai-env はホスト側で basename を検証（英数字・`._-`）してからマウント先を組み立てる。
+_Avoid_: プロジェクトパス, HOST_PROJECT_NAME（廃止された環境変数）
+
+**Project Directory**:
+コンテナ内のプロジェクトごとの作業ディレクトリ（`/workspace/<プロジェクト名>`）。プロジェクトの内容はホストの cwd がマウントされる。pi のセッション整理（cwd ベース）がプロジェクト単位で機能するための仕組み（ADR 0005）。
+_Avoid_: workspace（文脈なし）
 
 **Explicit Session**:
-CLI の `--session <id>` で直接指定されたセッション。プロジェクト設定を上書きして 1 回だけ再開される（コンテナ内 `pi-resume` 関数には反映されない）。
+CLI の `--session <id>` で直接指定されたセッション。1 回だけ再開される（コンテナ内 `pi-resume` 関数には反映されない）。
 _Avoid_: CLI session（pi の `--session-id` と紛らわしい）, 上書きセッション
 
 **Resume**:
-既存セッションに接続して pi を起動する操作。経路は 2 つ：`--resume`（プロジェクトセッション）と `--session`（明示セッション）。
+既存セッションに接続して pi を起動・切り替える操作。経路は `pi -c`（最新セッションの続行）、`/resume`（プロジェクト内ピッカー）、`--session`（明示セッション）。
 _Avoid_: 引き継ぐ（README の旧表現）, 継続

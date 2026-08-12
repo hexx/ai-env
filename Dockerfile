@@ -143,7 +143,7 @@ RUN curl -fsSL https://herdr.dev/install.sh | sh \
 # 5. ユーザー固有の設定とエントリーポイント
 # =========================================================
 # マウントしたディレクトリでのGit権限エラー対策
-RUN git config --global --add safe.directory /workspace
+RUN git config --global --add safe.directory '/workspace/*'
 
 # herdr用環境変数とパスの設定
 ENV HERDR_ENV=1 \

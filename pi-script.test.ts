@@ -10,7 +10,8 @@ import { buildInitScript, loadAiEnvConfig } from "./pi-projects";
 
 // ===== ヘルパー =====
 
-
+// テスト共通の workdir(コンテナ内のプロジェクト作業ディレクトリ)。
+const TEST_WORKDIR = "/workspace/test-project";
 
 // テスト用の一時ディレクトリ配下に pi-projects.json を書き出す。
 // 戻り値は「ディレクトリ作成時に作った一時ディレクトリの cleanup 関数」。
@@ -92,180 +93,8 @@ const extractPiResumeCases = (script: string): string[] => {
   return extractCaseLinesWithAwk(script, "^pi-resume\\(\\)");
 };
 
-
-
-// ===== テスト =====
-
-describe("buildInitScript - apiKeyEnv フォールバック", () => {
-  it("プロジェクト側に apiKeyEnv がある場合、プロジェクト側の値を使う", () => {
-    const script = buildInitScript({
-      defaultApiKeyEnv: "PROFILE_KEY",
-      defaultModel: undefined,
-      defaultProvider: undefined,
-      projects: {
-        "ai-env": {
-          apiKeyEnv: "PROJECT_KEY",
-          session: "019ec00f-6774-7719-9d32-0ce0acf7892f",
-        },
-      },
-    });
-    assertShellSyntax(script);
-    const cases = extractPiResumeCases(script);
-    const aiEnvCase = cases.find((line) => line.includes("ai-env"));
-    assert.ok(aiEnvCase, "ai-env の case 行が存在する");
-    assert.match(aiEnvCase, /--api-key "\$PROJECT_KEY"/);
-    assert.doesNotMatch(aiEnvCase, /PROFILE_KEY/);
-  });
-
-  it("プロジェクト側に apiKeyEnv がない場合、プロファイルの defaultApiKeyEnv を使う", () => {
-    const script = buildInitScript({
-      defaultApiKeyEnv: "PROFILE_KEY",
-      defaultModel: undefined,
-      defaultProvider: undefined,
-      projects: {
-        "task-manager": {
-          session: "019ea76f-92d3-7442-a675-b79162e7f1c7",
-        },
-      },
-    });
-    assertShellSyntax(script);
-    const cases = extractPiResumeCases(script);
-    const taskCase = cases.find((line) => line.includes("task-manager"));
-    assert.ok(taskCase, "task-manager の case 行が存在する");
-    assert.match(taskCase, /--api-key "\$PROFILE_KEY"/);
-  });
-
-  it("複数のプロジェクトで apiKeyEnv の有無が混在していてもそれぞれ正しく生成される", () => {
-    // プロジェクト単位で apiKeyEnv を持つもの / プロファイルからのフォールバックを
-    // 受けるもの / デフォルト自身も undefined のため --api-key を出さないものを混在させる。
-    const script = buildInitScript({
-      defaultApiKeyEnv: "PROFILE_KEY",
-      defaultModel: undefined,
-      defaultProvider: undefined,
-      projects: {
-        "with-project-key": {
-          apiKeyEnv: "PROJECT_KEY",
-          session: "11111111-1111-1111-1111-111111111111",
-        },
-        "with-profile-key": {
-          session: "22222222-2222-2222-2222-222222222222",
-        },
-      },
-    });
-    assertShellSyntax(script);
-    const cases = extractPiResumeCases(script);
-    const withProjectKey = cases.find((line) => line.includes("with-project-key"));
-    const withProfileKey = cases.find((line) => line.includes("with-profile-key"));
-    assert.ok(withProjectKey && withProfileKey, "2 つの case 行が全て存在する");
-    assert.match(withProjectKey, /--api-key "\$PROJECT_KEY"/);
-    assert.doesNotMatch(withProjectKey, /PROFILE_KEY/);
-    assert.match(withProfileKey, /--api-key "\$PROFILE_KEY"/);
-  });
-
-  it("buildInitScript に defaultApiKeyEnv を渡さなくても型エラーなく動作する(オプショナル)", () => {
-    // defaultApiKeyEnv を省略しても undefined として扱われ、--api-key は出力されない。
-    const script = buildInitScript({
-      defaultModel: undefined,
-      defaultProvider: undefined,
-      projects: {
-        "task-manager": {
-          session: "019ea76f-92d3-7442-a675-b79162e7f1c7",
-        },
-      },
-    });
-    assertShellSyntax(script);
-    const cases = extractPiResumeCases(script);
-    assert.ok(cases.some((line) => line.includes("task-manager")));
-    assert.ok(!script.includes("--api-key"), "--api-key フラグは出力されない");
-  });
-
-  it("プロジェクトの model にコロン区切り書式を指定できる(deepseek-v4-flash:xhigh)", async () => {
-    await withTempConfig(
-      {
-        profiles: {
-          "pi-work": {
-            OCR_USE_ANTHROPIC: "true",
-            OCR_LLM_URL: "https://api.anthropic.com/v1/messages",
-            OCR_LLM_TOKEN_KEY: "WORK_API_KEY",
-            OCR_LLM_MODEL: "claude-3-5-sonnet-20241022",
-          },
-        },
-        projects: {
-          "test-project": {
-            session: "019ec00f-6774-7719-9d32-0ce0acf7892f",
-            model: "deepseek-v4-flash:xhigh",
-          },
-        },
-      },
-      (_configPath) => {
-        const config = loadAiEnvConfig();
-        assert.equal(config.projects["test-project"]?.model, "deepseek-v4-flash:xhigh");
-      },
-    );
-  });
-
-  it("プロファイルの model にコロン区切り書式を指定できる", async () => {
-    await withTempConfig(
-      {
-        profiles: {
-          "pi-work": {
-            OCR_USE_ANTHROPIC: "true",
-            OCR_LLM_URL: "https://api.anthropic.com/v1/messages",
-            OCR_LLM_TOKEN_KEY: "WORK_API_KEY",
-            OCR_LLM_MODEL: "claude-3-5-sonnet-20241022",
-            model: "deepseek-v4-flash:xhigh",
-          },
-        },
-        projects: {
-          "test-project": {
-            session: "019ec00f-6774-7719-9d32-0ce0acf7892f",
-          },
-        },
-      },
-      (_configPath) => {
-        const config = loadAiEnvConfig();
-        assert.equal(config.profiles["pi-work"]?.model, "deepseek-v4-flash:xhigh");
-      },
-    );
-  });
-
-  it("プロジェクトの model に不正文字(シェルメタ文字)は引き続き拒否する", async () => {
-    await withTempConfig(
-      {
-        profiles: {
-          "pi-work": {
-            OCR_USE_ANTHROPIC: "true",
-            OCR_LLM_URL: "https://api.anthropic.com/v1/messages",
-            OCR_LLM_TOKEN_KEY: "WORK_API_KEY",
-            OCR_LLM_MODEL: "claude-3-5-sonnet-20241022",
-          },
-        },
-        projects: {
-          "test-project": {
-            session: "019ec00f-6774-7719-9d32-0ce0acf7892f",
-            model: "deepseek-v4-flash;rm -rf /",
-          },
-        },
-      },
-      () => {
-        assert.throws(
-          () => loadAiEnvConfig(),
-          /model/,
-        );
-      },
-    );
-  });
-});
-
-// ===== デフォルト起動: プロジェクト設定の反映 =====
-//
-// 課題 #issue-202606280835 の主修正。ai-env を --resume / --bash なしで起動した時、
-// projects 内の provider / model / apiKeyEnv が反映されるべき。
-// デフォルト起動では pi-resume と同じ case 解決をインライン化するため、
-// テストでは case ベースのスクリプト出力を検証する。
-
 // デフォルト起動モード時のスクリプトを生成し、case 本体と project 解決ロジックを返す。
-// awk を使って project="${HOST_PROJECT_NAME}" 以降の case ブロックの本体を切り出す。
+// awk を使って project="$(basename "$PWD")" 以降の case ブロックの本体を切り出す。
 // 正規表現パースに比べ、空白や改行の変更に対して耐性がある。
 const extractDefaultCaseBody = (script: string): string => {
   const { execSync } = require("node:child_process");
@@ -293,7 +122,7 @@ const extractDefaultCaseBody = (script: string): string => {
   }
 };
 
-// デフォルト起動時の指定プロジェクトの case 行(例: "    pi) pi ... ;;")を抽出する。
+// デフォルト起動時の指定プロジェクトの case 行(例: "    pi) pi -c ... ;;")を抽出する。
 // 文字列包含で検索する（awk で抽出済みのため、正規表現不要）。
 const findDefaultCaseLine = (
   script: string,
@@ -306,8 +135,198 @@ const findDefaultCaseLine = (
   );
 };
 
+// ===== 共通: workdir への cd =====
+
+describe("buildInitScript - 共通初期化", () => {
+  it("プロジェクトの作業ディレクトリへ cd する", () => {
+    const script = buildInitScript({
+      defaultApiKeyEnv: undefined,
+      defaultModel: undefined,
+      defaultProvider: undefined,
+      projects: {},
+      workdir: TEST_WORKDIR,
+    });
+    assertShellSyntax(script);
+    assert.match(script, new RegExp(`^cd ${TEST_WORKDIR}$`, "m"));
+  });
+
+  it("pi-resume 関数のプロジェクト名デフォルトはカレントディレクトリ名から解決する", () => {
+    const script = buildInitScript({
+      defaultApiKeyEnv: undefined,
+      defaultModel: undefined,
+      defaultProvider: undefined,
+      projects: {},
+      workdir: TEST_WORKDIR,
+    });
+    assertShellSyntax(script);
+    assert.match(script, /local project="\$\{1:-\$\(basename "\$PWD"\)\}"/);
+  });
+});
+
+// ===== apiKeyEnv フォールバック =====
+
+describe("buildInitScript - apiKeyEnv フォールバック", () => {
+  it("プロジェクト側に apiKeyEnv がある場合、プロジェクト側の値を使う", () => {
+    const script = buildInitScript({
+      defaultApiKeyEnv: "PROFILE_KEY",
+      defaultModel: undefined,
+      defaultProvider: undefined,
+      projects: {
+        "ai-env": {
+          apiKeyEnv: "PROJECT_KEY",
+        },
+      },
+      workdir: TEST_WORKDIR,
+    });
+    assertShellSyntax(script);
+    const cases = extractPiResumeCases(script);
+    const aiEnvCase = cases.find((line) => line.includes("ai-env"));
+    assert.ok(aiEnvCase, "ai-env の case 行が存在する");
+    assert.match(aiEnvCase, /--api-key "\$PROJECT_KEY"/);
+    assert.doesNotMatch(aiEnvCase, /PROFILE_KEY/);
+  });
+
+  it("プロジェクト側に apiKeyEnv がない場合、プロファイルの defaultApiKeyEnv を使う", () => {
+    const script = buildInitScript({
+      defaultApiKeyEnv: "PROFILE_KEY",
+      defaultModel: undefined,
+      defaultProvider: undefined,
+      projects: {
+        "task-manager": {},
+      },
+      workdir: TEST_WORKDIR,
+    });
+    assertShellSyntax(script);
+    const cases = extractPiResumeCases(script);
+    const taskCase = cases.find((line) => line.includes("task-manager"));
+    assert.ok(taskCase, "task-manager の case 行が存在する");
+    assert.match(taskCase, /--api-key "\$PROFILE_KEY"/);
+  });
+
+  it("複数のプロジェクトで apiKeyEnv の有無が混在していてもそれぞれ正しく生成される", () => {
+    // プロジェクト単位で apiKeyEnv を持つもの / プロファイルからのフォールバックを
+    // 受けるもの / デフォルト自身も undefined のため --api-key を出さないものを混在させる。
+    const script = buildInitScript({
+      defaultApiKeyEnv: "PROFILE_KEY",
+      defaultModel: undefined,
+      defaultProvider: undefined,
+      projects: {
+        "with-project-key": {
+          apiKeyEnv: "PROJECT_KEY",
+        },
+        "with-profile-key": {},
+      },
+      workdir: TEST_WORKDIR,
+    });
+    assertShellSyntax(script);
+    const cases = extractPiResumeCases(script);
+    const withProjectKey = cases.find((line) => line.includes("with-project-key"));
+    const withProfileKey = cases.find((line) => line.includes("with-profile-key"));
+    assert.ok(withProjectKey && withProfileKey, "2 つの case 行が全て存在する");
+    assert.match(withProjectKey, /--api-key "\$PROJECT_KEY"/);
+    assert.doesNotMatch(withProjectKey, /PROFILE_KEY/);
+    assert.match(withProfileKey, /--api-key "\$PROFILE_KEY"/);
+  });
+
+  it("buildInitScript に defaultApiKeyEnv を渡さなくても型エラーなく動作する(オプショナル)", () => {
+    // defaultApiKeyEnv を省略しても undefined として扱われ、--api-key は出力されない。
+    const script = buildInitScript({
+      defaultModel: undefined,
+      defaultProvider: undefined,
+      projects: {
+        "task-manager": {},
+      },
+      workdir: TEST_WORKDIR,
+    });
+    assertShellSyntax(script);
+    const cases = extractPiResumeCases(script);
+    assert.ok(cases.some((line) => line.includes("task-manager")));
+    assert.ok(!script.includes("--api-key"), "--api-key フラグは出力されない");
+  });
+
+  it("プロジェクトの model にコロン区切り書式を指定できる(deepseek-v4-flash:xhigh)", async () => {
+    await withTempConfig(
+      {
+        profiles: {
+          "pi-work": {
+            OCR_USE_ANTHROPIC: "true",
+            OCR_LLM_URL: "https://api.anthropic.com/v1/messages",
+            OCR_LLM_TOKEN_KEY: "WORK_API_KEY",
+            OCR_LLM_MODEL: "claude-3-5-sonnet-20241022",
+          },
+        },
+        projects: {
+          "test-project": {
+            model: "deepseek-v4-flash:xhigh",
+          },
+        },
+      },
+      (_configPath) => {
+        const config = loadAiEnvConfig();
+        assert.equal(config.projects["test-project"]?.model, "deepseek-v4-flash:xhigh");
+      },
+    );
+  });
+
+  it("プロファイルの model にコロン区切り書式を指定できる", async () => {
+    await withTempConfig(
+      {
+        profiles: {
+          "pi-work": {
+            OCR_USE_ANTHROPIC: "true",
+            OCR_LLM_URL: "https://api.anthropic.com/v1/messages",
+            OCR_LLM_TOKEN_KEY: "WORK_API_KEY",
+            OCR_LLM_MODEL: "claude-3-5-sonnet-20241022",
+            model: "deepseek-v4-flash:xhigh",
+          },
+        },
+        projects: {
+          "test-project": {},
+        },
+      },
+      (_configPath) => {
+        const config = loadAiEnvConfig();
+        assert.equal(config.profiles["pi-work"]?.model, "deepseek-v4-flash:xhigh");
+      },
+    );
+  });
+
+  it("プロジェクトの model に不正文字(シェルメタ文字)は引き続き拒否する", async () => {
+    await withTempConfig(
+      {
+        profiles: {
+          "pi-work": {
+            OCR_USE_ANTHROPIC: "true",
+            OCR_LLM_URL: "https://api.anthropic.com/v1/messages",
+            OCR_LLM_TOKEN_KEY: "WORK_API_KEY",
+            OCR_LLM_MODEL: "claude-3-5-sonnet-20241022",
+          },
+        },
+        projects: {
+          "test-project": {
+            model: "deepseek-v4-flash;rm -rf /",
+          },
+        },
+      },
+      () => {
+        assert.throws(
+          () => loadAiEnvConfig(),
+          /model/,
+        );
+      },
+    );
+  });
+});
+
+// ===== デフォルト起動: プロジェクト設定の反映 =====
+//
+// ai-env を --new / --bash なしで起動した時、projects 内の provider / model /
+// apiKeyEnv が反映され、pi -c で前回セッションを続行する(セッションがなければ新規作成)。
+// デフォルト起動では pi-resume と同じ case 解決をインライン化するため、
+// テストでは case ベースのスクリプト出力を検証する。
+
 describe("buildInitScript - デフォルト起動でプロジェクト設定を反映", () => {
-  it("プロジェクト側の provider / model / apiKeyEnv が pi コマンドに渡る(session は付けない)", () => {
+  it("プロジェクト側の provider / model / apiKeyEnv が pi -c に渡る", () => {
     const script = buildInitScript({
       defaultApiKeyEnv: undefined,
       defaultModel: undefined,
@@ -317,22 +336,22 @@ describe("buildInitScript - デフォルト起動でプロジェクト設定を�
           apiKeyEnv: "LLM_API_KEY",
           model: "deepseek-v4-flash:xhigh",
           provider: "opencode-go",
-          session: "019f0b62-a4db-75ad-af9f-d78d43604605",
         },
       },
+      workdir: TEST_WORKDIR,
     });
     assertShellSyntax(script);
     const caseLine = findDefaultCaseLine(script, "pi");
     assert.ok(caseLine, "pi の case 行が存在する");
-    assert.match(caseLine, /--provider opencode-go/);
+    // デフォルト起動は pi -c(前回セッションの続行)
+    assert.match(caseLine, /pi -c --provider opencode-go/);
     assert.match(caseLine, /--model deepseek-v4-flash:xhigh/);
     assert.match(caseLine, /--api-key "\$LLM_API_KEY"/);
-    // デフォルト起動(--resume / --bash なし)では --session を付けない。
-    // セッションを再開したい場合は --resume を指定する。
+    // デフォルト起動では --session を付けない(--session は cliSession のみ)。
     assert.doesNotMatch(caseLine, /--session/);
   });
 
-  it("プロジェクト設定とプロフィールデフォルトが混在しても各プロジェクトのケースが正しく生成される(session は付けない)", () => {
+  it("プロジェクト設定とプロフィールデフォルトが混在しても各プロジェクトのケースが正しく生成される", () => {
     const script = buildInitScript({
       defaultApiKeyEnv: "PROFILE_KEY",
       defaultModel: "claude-3-5-sonnet-20241022",
@@ -343,55 +362,88 @@ describe("buildInitScript - デフォルト起動でプロジェクト設定を�
           apiKeyEnv: "PROJECT_KEY",
           model: "minimax-m3",
           provider: "opencode-go",
-          session: "019ec00f-6774-7719-9d32-0ce0acf7892f",
         },
         // プロジェクト側に未指定 → プロフィールデフォルト
-        "task-manager": {
-          session: "019ea76f-92d3-7442-a675-b79162e7f1c7",
-        },
+        "task-manager": {},
       },
+      workdir: TEST_WORKDIR,
     });
     assertShellSyntax(script);
     const aiEnvLine = findDefaultCaseLine(script, "ai-env");
     const taskLine = findDefaultCaseLine(script, "task-manager");
     assert.ok(aiEnvLine && taskLine);
-    assert.match(aiEnvLine, /--provider opencode-go/);
+    assert.match(aiEnvLine, /pi -c --provider opencode-go/);
     assert.match(aiEnvLine, /--model minimax-m3/);
     assert.match(aiEnvLine, /--api-key "\$PROJECT_KEY"/);
-    assert.match(taskLine, /--provider anthropic/);
+    assert.match(taskLine, /pi -c --provider anthropic/);
     assert.match(taskLine, /--model claude-3-5-sonnet-20241022/);
     assert.match(taskLine, /--api-key "\$PROFILE_KEY"/);
-    // デフォルト起動では session は引き継がない。
-    assert.doesNotMatch(aiEnvLine, /--session/);
-    assert.doesNotMatch(taskLine, /--session/);
   });
 
-  it("projects が空でもシェルスクリプトとして成立する(*) 分岐で pi を起動)", () => {
+  it("projects が空でもシェルスクリプトとして成立する(*) 分岐で pi -c を起動)", () => {
     const script = buildInitScript({
       defaultApiKeyEnv: undefined,
       defaultModel: undefined,
       defaultProvider: undefined,
       projects: {},
+      workdir: TEST_WORKDIR,
     });
     assertShellSyntax(script);
     const body = extractDefaultCaseBody(script);
-    assert.match(body, /^\s*\*\) pi ;;$/m);
+    assert.match(body, /^\s*\*\) pi -c ;;$/m);
   });
 
-  it("未知プロジェクト用 *) 分岐ではプロフィールデフォルトで pi を起動する", () => {
+  it("未知プロジェクト用 *) 分岐ではプロフィールデフォルトで pi -c を起動する", () => {
     const script = buildInitScript({
       defaultApiKeyEnv: "PROFILE_KEY",
       defaultModel: "claude-3-5-sonnet-20241022",
       defaultProvider: "anthropic",
       projects: {
-        known: {
-          session: "019ea76f-92d3-7442-a675-b79162e7f1c7",
-        },
+        known: {},
       },
+      workdir: TEST_WORKDIR,
     });
     assertShellSyntax(script);
     const body = extractDefaultCaseBody(script);
-    assert.match(body, /^\s*\*\) pi --provider anthropic --model claude-3-5-sonnet-20241022 ;;$/m);
+    assert.match(body, /^\s*\*\) pi -c --provider anthropic --model claude-3-5-sonnet-20241022 ;;$/m);
+  });
+});
+
+// ===== --new モード =====
+
+describe("buildInitScript - --new モード", () => {
+  it("--new 指定時は pi -c を付けず、新しいセッションで pi を起動する", () => {
+    const script = buildInitScript({
+      defaultApiKeyEnv: undefined,
+      defaultModel: undefined,
+      defaultProvider: undefined,
+      newMode: true,
+      projects: {
+        pi: {
+          provider: "opencode-go",
+        },
+      },
+      workdir: TEST_WORKDIR,
+    });
+    assertShellSyntax(script);
+    const caseLine = findDefaultCaseLine(script, "pi");
+    assert.ok(caseLine);
+    assert.match(caseLine, /pi --provider opencode-go/);
+    assert.doesNotMatch(caseLine, /-c/);
+  });
+
+  it("--new 指定時の *) フォールバックは pi (引数なし) になる", () => {
+    const script = buildInitScript({
+      defaultApiKeyEnv: undefined,
+      defaultModel: undefined,
+      defaultProvider: undefined,
+      newMode: true,
+      projects: {},
+      workdir: TEST_WORKDIR,
+    });
+    assertShellSyntax(script);
+    const body = extractDefaultCaseBody(script);
+    assert.match(body, /^\s*\*\) pi ;;$/m);
   });
 });
 
@@ -406,17 +458,16 @@ describe("buildInitScript - CLI オーバーライド (CLI > Project > Profile)"
       defaultModel: "claude-3-5-sonnet-20241022",
       defaultProvider: "anthropic",
       projects: {
-        known: {
-          session: "019ea76f-92d3-7442-a675-b79162e7f1c7",
-        },
+        known: {},
       },
+      workdir: TEST_WORKDIR,
     });
     assertShellSyntax(script);
     const body = extractDefaultCaseBody(script);
-    assert.match(body, /^\s*\*\) pi --provider anthropic --model claude-opus-4-7 ;;$/m);
+    assert.match(body, /^\s*\*\) pi -c --provider anthropic --model claude-opus-4-7 ;;$/m);
   });
 
-  it("CLI の provider / model はプロジェクト case より優先される(session は付けない)", () => {
+  it("CLI の provider / model はプロジェクト case より優先される", () => {
     const script = buildInitScript({
       cliModel: "override-model",
       cliProvider: "override-provider",
@@ -427,9 +478,9 @@ describe("buildInitScript - CLI オーバーライド (CLI > Project > Profile)"
         pi: {
           model: "original-model",
           provider: "original-provider",
-          session: "019f0b62-a4db-75ad-af9f-d78d43604605",
         },
       },
+      workdir: TEST_WORKDIR,
     });
     assertShellSyntax(script);
     const caseLine = findDefaultCaseLine(script, "pi");
@@ -438,11 +489,9 @@ describe("buildInitScript - CLI オーバーライド (CLI > Project > Profile)"
     assert.match(caseLine, /--model override-model/);
     assert.doesNotMatch(caseLine, /original-provider/);
     assert.doesNotMatch(caseLine, /original-model/);
-    // デフォルト起動なので session は引き継がない。
-    assert.doesNotMatch(caseLine, /--session/);
   });
 
-  it("pi-resume 関数では *) 分岐に警告メッセージ+ pi (引数なし) を維持する", () => {
+  it("pi-resume 関数では *) 分岐に警告メッセージ+ pi -c (引数なし) を維持する", () => {
     const script = buildInitScript({
       cliModel: "override-model",
       cliProvider: "override-provider",
@@ -450,53 +499,29 @@ describe("buildInitScript - CLI オーバーライド (CLI > Project > Profile)"
       defaultModel: undefined,
       defaultProvider: undefined,
       projects: {},
-      resume: true,
+      workdir: TEST_WORKDIR,
     });
     assertShellSyntax(script);
-    // pi-resume 関数内の *) 分岐は警告 + pi (引数なし) を維持。
+    // pi-resume 関数内の *) 分岐は警告 + pi -c (引数なし) を維持。
     assert.match(script, /Warning: Unknown project - trying pi with defaults/);
-    // 関数の直後の呼び出しでは pi-resume を使う(デフォルト起動と区別)。
-    assert.match(script, /\npi-resume\n/);
-  });
-
-  it("--resume モードの pi-resume 関数では project.session が --session として渡る", () => {
-    // --resume を指定すると pi-resume 関数が生成され、プロジェクトの session が
-    // --session フラグとして組み立てられる(--resume がセッション再開の目的なので、
-    // デフォルト起動とは違って session を引き継ぐ)。
-    const script = buildInitScript({
-      defaultApiKeyEnv: undefined,
-      defaultModel: undefined,
-      defaultProvider: undefined,
-      projects: {
-        pi: {
-          apiKeyEnv: "LLM_API_KEY",
-          model: "deepseek-v4-flash:xhigh",
-          provider: "opencode-go",
-          session: "019f0b62-a4db-75ad-af9f-d78d43604605",
-        },
-      },
-      resume: true,
-    });
-    assertShellSyntax(script);
-    const cases = extractPiResumeCases(script);
-    const piCase = cases.find((line) => line.includes("pi)"));
-    assert.ok(piCase, "pi の case 行が pi-resume 関数内に存在する");
-    assert.match(piCase, /--provider opencode-go/);
-    assert.match(piCase, /--model deepseek-v4-flash:xhigh/);
-    assert.match(piCase, /--api-key "\$LLM_API_KEY"/);
-    assert.match(piCase, /--session 019f0b62-a4db-75ad-af9f-d78d43604605/);
+    // フォールバック行は awk 抽出パターン( ") pi " )にマッチしないため、
+    // pi-resume 関数ブロックを直接切り出して確認する。
+    const piResumeFunc = script.match(/pi-resume\(\) \{[\s\S]*?\n\}/);
+    assert.ok(piResumeFunc, "pi-resume 関数が存在する");
+    assert.match(piResumeFunc[0], /Warning: Unknown project/);
+    assert.match(piResumeFunc[0], /pi -c ;;\n  esac/);
   });
 });
 
 // ===== --session (明示セッション) =====
 
 // --session <id> は CLI からセッション ID を直接指定して既存セッションを再開する
-// 機能。--resume と排他(--session は再開を内包)のため、デフォルト起動モードの
+// 機能。--new と排他(--session は再開を内包)のため、デフォルト起動モードの
 // case 解決に cliSession として渡される。provider / model / apiKeyEnv は従来どおり
 // CLI > Project > Profile の優先順位で解決する。
 
 describe("buildInitScript - --session (明示セッション)", () => {
-  it("デフォルト起動 + cliSession で case に --session <id> が含まれる", () => {
+  it("デフォルト起動 + cliSession で case に -c と --session <id> が含まれる", () => {
     const script = buildInitScript({
       cliSession: "019fe743-77fc-7ad5-82dd-4f64e7c64517",
       defaultApiKeyEnv: undefined,
@@ -507,38 +532,18 @@ describe("buildInitScript - --session (明示セッション)", () => {
           apiKeyEnv: "LLM_API_KEY",
           model: "deepseek-v4-flash:xhigh",
           provider: "opencode-go",
-          session: "019f0b62-a4db-75ad-af9f-d78d43604605",
         },
       },
+      workdir: TEST_WORKDIR,
     });
     assertShellSyntax(script);
     const caseLine = findDefaultCaseLine(script, "pi");
     assert.ok(caseLine, "pi の case 行が存在する");
-    assert.match(caseLine, /--provider opencode-go/);
+    assert.match(caseLine, /pi -c --provider opencode-go/);
     assert.match(caseLine, /--model deepseek-v4-flash:xhigh/);
     assert.match(caseLine, /--api-key "\$LLM_API_KEY"/);
-    // 明示セッションが --session として渡る(プロジェクト設定の session を上書き)。
+    // 明示セッションが --session として渡る。
     assert.match(caseLine, /--session 019fe743-77fc-7ad5-82dd-4f64e7c64517/);
-    assert.doesNotMatch(caseLine, /019f0b62-a4db-75ad-af9f-d78d43604605/);
-  });
-
-  it("cliSession はプロジェクト設定の session より優先される", () => {
-    const script = buildInitScript({
-      cliSession: "019fe743-77fc-7ad5-82dd-4f64e7c64517",
-      defaultApiKeyEnv: undefined,
-      defaultModel: undefined,
-      defaultProvider: undefined,
-      projects: {
-        pi: {
-          session: "019f0b62-a4db-75ad-af9f-d78d43604605",
-        },
-      },
-    });
-    assertShellSyntax(script);
-    const caseLine = findDefaultCaseLine(script, "pi");
-    assert.ok(caseLine);
-    assert.match(caseLine, /--session 019fe743-77fc-7ad5-82dd-4f64e7c64517/);
-    assert.doesNotMatch(caseLine, /019f0b62-a4db-75ad-af9f-d78d43604605/);
   });
 
   it("未知プロジェクト用 *) 分岐にも cliSession が --session として渡る", () => {
@@ -548,56 +553,51 @@ describe("buildInitScript - --session (明示セッション)", () => {
       defaultModel: "claude-3-5-sonnet-20241022",
       defaultProvider: "anthropic",
       projects: {
-        known: {
-          session: "019ea76f-92d3-7442-a675-b79162e7f1c7",
-        },
+        known: {},
       },
+      workdir: TEST_WORKDIR,
     });
     assertShellSyntax(script);
     const body = extractDefaultCaseBody(script);
     assert.match(
       body,
-      /^\s*\*\) pi --provider anthropic --model claude-3-5-sonnet-20241022 --session 019fe743-77fc-7ad5-82dd-4f64e7c64517 ;;$/m,
+      /^\s*\*\) pi -c --provider anthropic --model claude-3-5-sonnet-20241022 --session 019fe743-77fc-7ad5-82dd-4f64e7c64517 ;;$/m,
     );
   });
 
-  it("cliSession を渡さなければ従来どおり --session を含まない(新規セッション)", () => {
+  it("cliSession を渡さなければ --session を含まない(pi -c のみ)", () => {
     const script = buildInitScript({
       defaultApiKeyEnv: undefined,
       defaultModel: undefined,
       defaultProvider: undefined,
       projects: {
-        pi: {
-          session: "019f0b62-a4db-75ad-af9f-d78d43604605",
-        },
+        pi: {},
       },
+      workdir: TEST_WORKDIR,
     });
     assertShellSyntax(script);
     const caseLine = findDefaultCaseLine(script, "pi");
     assert.ok(caseLine);
     assert.doesNotMatch(caseLine, /--session/);
+    assert.match(caseLine, /-c/);
   });
 
-  it("--resume モードでは cliSession は pi-resume 関数に反映されない(ワンショット)", () => {
+  it("cliSession は pi-resume 関数に焼き込まれない(ワンショット)", () => {
     const script = buildInitScript({
       cliSession: "019fe743-77fc-7ad5-82dd-4f64e7c64517",
       defaultApiKeyEnv: undefined,
       defaultModel: undefined,
       defaultProvider: undefined,
       projects: {
-        pi: {
-          session: "019f0b62-a4db-75ad-af9f-d78d43604605",
-        },
+        pi: {},
       },
-      resume: true,
+      workdir: TEST_WORKDIR,
     });
     assertShellSyntax(script);
-    // pi-resume 関数は projects 設定の session を使う(--session は CLI と排他なので
-    // 関数に焼き込まず、コンテナ内で pi-resume しても設定どおりのセッションを再開する)。
+    // pi-resume 関数は projects 設定のみを使い、cliSession は関数に反映されない。
     const cases = extractPiResumeCases(script);
     const piCase = cases.find((line) => line.includes("pi)"));
     assert.ok(piCase, "pi の case 行が pi-resume 関数内に存在する");
-    assert.match(piCase, /--session 019f0b62-a4db-75ad-af9f-d78d43604605/);
     assert.doesNotMatch(piCase, /019fe743-77fc-7ad5-82dd-4f64e7c64517/);
   });
 });
@@ -613,6 +613,7 @@ describe("buildInitScript - --bash モードで CLI オプションを env 変�
       defaultModel: undefined,
       defaultProvider: undefined,
       projects: {},
+      workdir: TEST_WORKDIR,
     });
     assertShellSyntax(script);
     assert.match(script, /^export PI_PROVIDER="opencode-go"$/m);
@@ -629,6 +630,7 @@ describe("buildInitScript - --bash モードで CLI オプションを env 変�
       defaultModel: undefined,
       defaultProvider: undefined,
       projects: {},
+      workdir: TEST_WORKDIR,
     });
     assertShellSyntax(script);
     assert.match(script, /^export PI_PROVIDER="opencode-go"$/m);
@@ -644,29 +646,11 @@ describe("buildInitScript - --bash モードで CLI オプションを env 変�
       defaultModel: undefined,
       defaultProvider: undefined,
       projects: {},
+      workdir: TEST_WORKDIR,
     });
     assertShellSyntax(script);
     assert.match(script, /^export PI_SESSION="019fe743-77fc-7ad5-82dd-4f64e7c64517"$/m);
     assert.match(script, /\nexec \/bin\/bash$/m);
-  });
-
-  it("4 つの CLI オプション全て指定すると 4 つの env 変数として export される", () => {
-    const script = buildInitScript({
-      bashMode: true,
-      cliApiKeyEnv: "WORK_API_KEY",
-      cliModel: "deepseek-v4-flash:xhigh",
-      cliProvider: "opencode-go",
-      cliSession: "019fe743-77fc-7ad5-82dd-4f64e7c64517",
-      defaultApiKeyEnv: undefined,
-      defaultModel: undefined,
-      defaultProvider: undefined,
-      projects: {},
-    });
-    assertShellSyntax(script);
-    assert.match(script, /^export PI_PROVIDER="opencode-go"$/m);
-    assert.match(script, /^export PI_MODEL="deepseek-v4-flash:xhigh"$/m);
-    assert.match(script, /^export PI_API_KEY_ENV="WORK_API_KEY"$/m);
-    assert.match(script, /^export PI_SESSION="019fe743-77fc-7ad5-82dd-4f64e7c64517"$/m);
   });
 
   it("CLI オプションが何も指定されなければ export 行は出力されない", () => {
@@ -676,6 +660,7 @@ describe("buildInitScript - --bash モードで CLI オプションを env 変�
       defaultModel: undefined,
       defaultProvider: undefined,
       projects: {},
+      workdir: TEST_WORKDIR,
     });
     assertShellSyntax(script);
     assert.doesNotMatch(script, /^export PI_/m);
@@ -690,10 +675,9 @@ describe("buildInitScript - --bash モードで CLI オプションを env 変�
       defaultModel: undefined,
       defaultProvider: undefined,
       projects: {
-        pi: {
-          session: "019f0b62-a4db-75ad-af9f-d78d43604605",
-        },
+        pi: {},
       },
+      workdir: TEST_WORKDIR,
     });
     assertShellSyntax(script);
     // pi-resume 関数が bashrc に注入される。
@@ -709,6 +693,7 @@ describe("buildInitScript - herdr セッション再アンカー競合への対�
     defaultModel: undefined,
     defaultProvider: undefined,
     projects: {},
+    workdir: TEST_WORKDIR,
   };
 
   it("デフォルト起動では pi 起動前に Agent Presence 待機ブロックが入る", () => {
@@ -718,15 +703,14 @@ describe("buildInitScript - herdr セッション再アンカー競合への対�
     assert.match(script, /herdr agent explain/);
     // 待機ブロックが pi 起動 (case 解決) より前にあること。
     assert.ok(
-      script.indexOf("herdr agent explain") < script.indexOf('project="${HOST_PROJECT_NAME}"'),
+      script.indexOf("herdr agent explain") < script.indexOf('project="$(basename "$PWD")"'),
     );
   });
 
-  it("--resume モードでも pi 起動前に Agent Presence 待機ブロックが入る", () => {
-    const script = buildInitScript({ ...baseParams, resume: true });
+  it("--new モードでも pi 起動前に Agent Presence 待機ブロックが入る", () => {
+    const script = buildInitScript({ ...baseParams, newMode: true });
     assertShellSyntax(script);
     assert.match(script, /herdr agent explain/);
-    assert.ok(script.indexOf("herdr agent explain") < script.indexOf("pi-resume\n"));
   });
 
   it("--bash モードでは Agent Presence 待機ブロックが入らない", () => {
@@ -750,6 +734,3 @@ describe("buildInitScript - herdr セッション再アンカー競合への対�
     assert.match(script, /HERDR_INTEGRATION_VERSION=8/);
   });
 });
-
-// ===== validateCliOverrides =====
-

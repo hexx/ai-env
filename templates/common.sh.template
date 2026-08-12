@@ -4,6 +4,11 @@
 
 set -euo pipefail
 
+# プロジェクトの作業ディレクトリへ移動する。
+# コンテナ内 cwd をプロジェクトごとに分け、pi のセッション整理(cwd ベース)を機能させる
+# (docs/adr/0005 参照)。
+cd {{WORKDIR}}
+
 # SSH キーセットアップ
 cp -r /tmp/.ssh ~/.ssh && \
 chown -R $(id -u):$(id -g) ~/.ssh && \

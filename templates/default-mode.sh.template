@@ -5,7 +5,7 @@
 {{COMMON_SCRIPT}}
 
 {{HERDR_PRESENCE_WAIT}}
-project="${HOST_PROJECT_NAME}"
+project="$(basename "$PWD")"
 case "$project" in
 {{CASE_BODY}}
 esac

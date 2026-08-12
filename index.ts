@@ -18,8 +18,8 @@ interface CliOptions {
   attach?: boolean;
   bash?: boolean;
   model?: string;
+  new?: boolean;
   provider?: string;
-  resume?: boolean;
   session?: string;
 }
 
@@ -33,13 +33,13 @@ const main = (options: CliOptions): number => {
       );
       return EXIT_ERROR;
     }
-    // --session はセッション再開を内包、--attach は pi を起動しないため、
+    // --new は新規セッションでの起動、--session はセッション再開を内包するため、
     // それぞれ排他フラグとの組み合わせを検証する。
     // 違反時は該当メッセージを stderr に出力して exit 1。
     const combinationError = validateFlagCombination({
       attach: options.attach ?? false,
       bash: options.bash ?? false,
-      resume: options.resume ?? false,
+      new: options.new ?? false,
       session: options.session !== undefined,
     });
     if (combinationError) {
@@ -60,8 +60,8 @@ const main = (options: CliOptions): number => {
         attachMode: options.attach ?? false,
         bashMode: options.bash ?? false,
         model: validated.model,
+        newMode: options.new ?? false,
         provider: validated.provider,
-        resume: options.resume ?? false,
         session: validated.session,
       }),
     );
@@ -80,10 +80,10 @@ program
   .version("0.1.0")
   .option("--attach", "同じディレクトリで起動中のコンテナにアタッチする")
   .option("--bash", "pi を起動せずに bash シェルのみを起動する")
-  .option("--resume", "pi-projects.json のセッションを再開して pi を起動する")
+  .option("--new", "新しいセッションで pi を起動する(デフォルトは前回セッションの続行: pi -c)")
   .option(
     "--session <id>",
-    "pi の --session フラグに渡すセッション ID(部分 ID 可、--resume とは排他、bash モードでは PI_SESSION env 変数として export)",
+    "pi の --session フラグに渡すセッション ID(部分 ID 可、--new とは排他、bash モードでは PI_SESSION env 変数として export)",
   )
   .option(
     "--provider <provider>",
