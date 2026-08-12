@@ -11,6 +11,7 @@ import {
   buildInitScript,
   loadAiEnvConfig,
 } from "./pi-projects";
+import { SAFE_SHELL_PATTERN } from "./pi-types";
 import { execFileSync, spawnSync } from "node:child_process";
 import { basename } from "node:path";
 import { platform } from "node:os";
@@ -22,6 +23,9 @@ export const IMAGE_NAME = "pi-sandbox";
 
 // コンテナ内の固定パス。Dockerfile 上のレイアウトと密結合しているため、
 // 定数として抽出することで変更点を発見しやすくする。
+// ワークスペースはプロジェクトごとに /workspace/<プロジェクト名> へマウントし、
+// コンテナ内 cwd をプロジェクト別に分けて pi のセッション整理(cwd ベース)を機能させる
+// (docs/adr/0005 参照)。
 const CONTAINER_WORKSPACE = "/workspace";
 const CONTAINER_SSH = "/tmp/.ssh";
 const CONTAINER_PI_HOME = "/home/pi/.pi";
@@ -47,8 +51,9 @@ export interface RunContext {
   attachMode: boolean;
   bashMode: boolean;
   model: string | undefined;
+  // --new: 新規セッションで pi を起動する(デフォルトは pi -c で前回セッションを続行)。
+  newMode: boolean;
   provider: string | undefined;
-  resume: boolean;
   // CLI の --session <id> で直接指定された明示セッション。
   session: string | undefined;
   credentials: PartialCredentials;
@@ -222,7 +227,6 @@ export const buildEnvArgs = (params: {
   credentials: PartialCredentials;
   herdrPaneId: string;
   hostIp: string;
-  hostProjectName: string;
   profile: ProfileConfig;
   profileName: string;
 }): string[] => {
@@ -239,7 +243,6 @@ export const buildEnvArgs = (params: {
   return [
     `--env=HERDR_PANE_ID=${params.herdrPaneId}`,
     `--env=HOST_IP=${params.hostIp}`,
-    `--env=HOST_PROJECT_NAME=${params.hostProjectName}`,
     `--env=AI_ENV_PROFILE=${params.profileName}`,
     `--env=OCR_USE_ANTHROPIC=${params.profile.OCR_USE_ANTHROPIC}`,
     `--env=OCR_LLM_URL=${params.profile.OCR_LLM_URL}`,
@@ -257,8 +260,18 @@ export const buildEnvArgs = (params: {
   ];
 };
 
-export const buildVolumeArgs = (home: string): string[] => [
-  `--volume=${process.cwd()}:${CONTAINER_WORKSPACE}`,
+// プロジェクトごとのコンテナ内ワークスペースパス(/workspace/<プロジェクト名>)。
+// マウント先(buildVolumeArgs)とコンテナ内 cwd(workdir)の両方で使用する。
+// 2 箇所で独立に構築するとズレた場合にコンテナの cwd が未マウントのディレクトリを
+// 指してしまい、プロジェクト別のセッション分離が静かに壊れるため、単一ヘルパーに集約する。
+export const projectWorkspacePath = (projectName: string): string =>
+  `${CONTAINER_WORKSPACE}/${projectName}`;
+
+// ワークスペースはプロジェクトごとに /workspace/<プロジェクト名> へマウントする。
+// コンテナ内 cwd をプロジェクト別に分けることで、pi のセッション整理(cwd ベース)が
+// そのプロジェクトのセッションだけを対象に機能する(docs/adr/0005 参照)。
+export const buildVolumeArgs = (home: string, projectName: string): string[] => [
+  `--volume=${process.cwd()}:${projectWorkspacePath(projectName)}`,
   `--volume=${home}/.ssh:${CONTAINER_SSH}:ro`,
   `--volume=${home}/.pi:${CONTAINER_PI_HOME}`,
   `--volume=${home}/.config/rtk:${CONTAINER_RTK_CONFIG}`,
@@ -353,19 +366,23 @@ export const isMacOS = (getPlatform: () => NodeJS.Platform = platform): boolean 
 // 違反時はエラーメッセージ文字列、問題なければ undefined を返す。
 // index.ts の main() から呼び出し、メッセージを stderr に出力して exit 1 する。
 // ルール:
-//   - --session はセッション再開を内包するため --resume と排他。
-//   - --attach は pi を起動しないため --bash / --resume / --session と排他。
+//   - --new は新規セッションでの起動を指定するため --session(再開を内包)と排他。
+//   - --attach は pi を起動しないため --bash / --new / --session と排他。
+//   - --bash は pi を起動しないため --new と排他。
 export const validateFlagCombination = (params: {
   attach: boolean;
   bash: boolean;
-  resume: boolean;
+  new: boolean;
   session: boolean;
 }): string | undefined => {
-  if (params.resume && params.session) {
-    return "--session はセッション再開を内包するため、--resume と同時に指定できません。'ai-env --session <id>' を使用してください。";
+  if (params.new && params.session) {
+    return "--new は新規セッションでの起動を指定するため、--session と同時に指定できません。'ai-env --session <id>' でセッションを再開してください。";
   }
-  if (params.attach && (params.bash || params.resume || params.session)) {
-    return "--attach は --bash / --resume / --session と同時に指定できません。";
+  if (params.attach && (params.bash || params.new || params.session)) {
+    return "--attach は --bash / --new / --session と同時に指定できません。";
+  }
+  if (params.bash && params.new) {
+    return "--bash は pi を起動しないため、--new と同時に指定できません。";
   }
   return undefined;
 };
@@ -440,11 +457,10 @@ export const runContainerCommand = (ctx: RunContext): number => {
     credentials: ctx.credentials,
     herdrPaneId: ctx.herdrPaneId,
     hostIp: ctx.hostIp,
-    hostProjectName: ctx.hostProjectName,
     profile: ctx.profile,
     profileName: ctx.profileName,
   });
-  const volumeArgs = buildVolumeArgs(ctx.home);
+  const volumeArgs = buildVolumeArgs(ctx.home, ctx.hostProjectName);
   const initScript = buildInitScript({
     bashMode: ctx.bashMode,
     cliApiKeyEnv: ctx.apiKeyEnv,
@@ -454,8 +470,9 @@ export const runContainerCommand = (ctx: RunContext): number => {
     defaultApiKeyEnv: ctx.profile.apiKeyEnv,
     defaultModel: ctx.profile.model,
     defaultProvider: ctx.profile.provider,
+    newMode: ctx.newMode,
     projects: ctx.projects,
-    resume: ctx.resume,
+    workdir: projectWorkspacePath(ctx.hostProjectName),
   });
   const containerArgs = buildContainerArgs(envArgs, volumeArgs, initScript, ctx.hostProjectName);
   console.error(`$ container ${redactSecrets(containerArgs).join(" ")}`);
@@ -467,17 +484,23 @@ export const prepareEnvironment = (params: {
   attachMode: boolean;
   bashMode: boolean;
   model: string | undefined;
+  newMode: boolean;
   provider: string | undefined;
-  resume: boolean;
   session: string | undefined;
 }): RunContext => {
   const credentials = loadCredentials();
   const home = requireEnv("HOME");
   const herdrPaneId = requireEnv("HERDR_PANE_ID");
-  // ホスト側のカレントディレクトリ名を取り、コンテナに環境変数として渡す。
-  // コンテナ内 $PWD は常に /workspace なので basename が 'workspace' 固定になり
-  // 自動認識が機能しないため、ホスト側で先に算出する。
+  // ホスト側のカレントディレクトリ名 = プロジェクト名。
+  // コンテナ内のマウント先ディレクトリ名(/workspace/<プロジェクト名>)と pi の
+  // セッション整理(cwd ベース)に使うため、SAFE_SHELL_PATTERN で検証する。
+  // 違反時はマウント先を安全に組み立てられないため起動を中断する。
   const hostProjectName = basename(process.cwd());
+  if (!SAFE_SHELL_PATTERN.test(hostProjectName)) {
+    throw new Error(
+      `カレントディレクトリ名 '${hostProjectName}' が無効です(英数字・ハイフン・アンダースコア・ピリオドのみ許可)。コンテナ内のマウント先ディレクトリ名に使用します。`,
+    );
+  }
   const aiEnvConfig: AiEnvConfig = loadAiEnvConfig();
   const profileName = detectProfileName(process.cwd(), aiEnvConfig.profiles);
   return {
@@ -485,8 +508,8 @@ export const prepareEnvironment = (params: {
     attachMode: params.attachMode,
     bashMode: params.bashMode,
     model: params.model,
+    newMode: params.newMode,
     provider: params.provider,
-    resume: params.resume,
     session: params.session,
     credentials,
     herdrPaneId,

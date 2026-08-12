@@ -4,7 +4,6 @@
 
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import stripJsonComments from "strip-json-comments";
 import {
@@ -71,7 +70,7 @@ export const toAiEnvConfigObject = (
       `設定ファイル ${configPath} の形式が不正です。\n` +
         `新構造 { profiles: {...}, projects: {...} } が必要です。\n` +
         `リポジトリの pi-projects.example.json を参考にしてください。\n` +
-        `(旧形式 { "<project>": "<session>" } および { "<project>": { session, provider?, model? } } はサポート対象外です。)`,
+        `(旧形式 { "<project>": "<session>" } のセッション ID 文字列は読み飛ばされますが、最上位構造は新形式にしてください。)`,
     );
   }
   return { profiles: obj.profiles, projects: obj.projects };
@@ -149,14 +148,14 @@ const parseProfiles = (
 // ===== プロジェクトパース =====
 
 // オブジェクト形式の value から ProjectConfig を組み立てる。
+// session フィールドは廃止(pi 標準の pi -c / --session で代替。docs/adr/0005 参照)のため
+// 読み飛ばす(検証もしない)。後方互換: 旧形式の session が残っていてもエラーにしない。
 export const parseProjectObjectValue = (
   configPath: string,
   key: string,
   obj: Record<string, unknown>,
 ): ProjectConfig => {
-  const config: ProjectConfig = {
-    session: requireSafeId({ configPath, fieldName: "session", key, pattern: SAFE_SHELL_PATTERN, rawValue: obj.session }),
-  };
+  const config: ProjectConfig = {};
   if ("provider" in obj) {
     config.provider = requireSafeId({ configPath, fieldName: "provider", key, pattern: SAFE_SHELL_PATTERN, rawValue: obj.provider });
   }
@@ -169,26 +168,27 @@ export const parseProjectObjectValue = (
   return config;
 };
 
-// 単一の (key, value) エントリを ProjectConfig に変換。文字列とオブジェクトの両対応。
+// 単一の (key, value) エントリを ProjectConfig に変換。
+// オブジェクト形式が本命で、旧形式の文字列(session ID のみ)は空の設定として読み飛ばす(後方互換)。
 export const parseProjectEntry = (
   configPath: string,
   key: string,
   value: unknown,
 ): ProjectConfig => {
   if (typeof value === "string") {
-    return {
-      session: requireSafeId({ configPath, fieldName: "session", key, pattern: SAFE_SHELL_PATTERN, rawValue: value }),
-    };
+    // 旧形式: セッション ID 文字列。session は廃止のため無視。
+    return {};
   }
   if (typeof value === "object" && value !== null && !Array.isArray(value)) {
     return parseProjectObjectValue(configPath, key, value as Record<string, unknown>);
   }
   throw new Error(
-    `設定ファイル ${configPath} の値が無効です: ${key} = ${JSON.stringify(value)} (文字列または { session, provider?, model? } オブジェクトが必要)`,
+    `設定ファイル ${configPath} の値が無効です: ${key} = ${JSON.stringify(value)} (オブジェクト { provider?, model?, apiKeyEnv? } が必要。旧形式のセッション ID 文字列も空設定として読み飛ばされます)`,
   );
 };
 
-// projects ブロックをパース・検証。session 必須/provider・model 任意(後方互換で文字列値も受付)。
+// projects ブロックをパース・検証。provider / model / apiKeyEnv は任意。
+// session は廃止(読み飛ばし)。旧形式の文字列値も空設定として受付(後方互換)。
 const parseProjects = (
   configPath: string,
   raw: unknown,
@@ -221,9 +221,7 @@ export const getDefaultConfig = (): AiEnvConfig => {
       },
     },
     projects: {
-      "pi-private": {
-        session: randomUUID(),
-      },
+      "pi-private": {},
     },
   };
 };

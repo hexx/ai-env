@@ -4,10 +4,10 @@
 // ===== 型定義 =====
 
 // 設定ファイル 1 プロジェクトぶんの設定。
-// 後方互換のため、value がオブジェクトではなく「セッション ID 文字列」の
-// 形式でも受け付ける(parseProjectValue で正規化)。
+// session は廃止(コンテナ内 cwd をプロジェクトごとに分け、pi 標準の pi -c / --session で
+// セッション再開を実現するため。詳細は docs/adr/0005 を参照)。
+// 後方互換のため、旧形式の値(セッション ID 文字列)も受け付ける(読み飛ばされる)。
 export interface ProjectConfig {
-  session: string;
   provider?: string;
   model?: string;
   apiKeyEnv?: string;

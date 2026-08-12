@@ -166,17 +166,17 @@ describe("redactSecrets", () => {
 describe("buildVolumeArgs", () => {
   it("SSH 鍵を :ro (読み取り専用) でマウントする", () => {
     // セキュリティクリティカル: :ro が抜けるとコンテナからホストのSSH鍵を改変可能になる。
-    const args = buildVolumeArgs("/Users/test");
+    const args = buildVolumeArgs("/Users/test", "my-project");
     const sshArg = args.find((a) => a.includes(".ssh"));
     assert.ok(sshArg, "SSH マウント引数が存在する");
     assert.match(sshArg!, /:ro$/, "末尾が :ro で終わる(読み取り専用)");
   });
 
   it("5 つのボリュームマウントが含まれる(cwd, .ssh, .pi, .config/rtk, .ctx)", () => {
-    const args = buildVolumeArgs("/Users/test");
+    const args = buildVolumeArgs("/Users/test", "my-project");
     const volumeArgs = args.filter((a) => a.startsWith("--volume="));
     assert.equal(volumeArgs.length, 5, "5 つの --volume 引数");
-    assert.ok(volumeArgs.some((a) => a.endsWith(":/workspace")), "cwd → /workspace");
+    assert.ok(volumeArgs.some((a) => a.endsWith(":/workspace/my-project")), "cwd → /workspace/my-project");
     assert.ok(volumeArgs.some((a) => a.includes("/Users/test/.ssh")), ".ssh の絶対パス");
     assert.ok(volumeArgs.some((a) => a.endsWith(":/home/pi/.pi")), ".pi → /home/pi/.pi");
     assert.ok(volumeArgs.some((a) => a.endsWith(":/home/pi/.rtk")), ".config/rtk → /home/pi/.rtk");
@@ -192,7 +192,6 @@ describe("buildEnvArgs", () => {
       credentials: sampleCredentials(),
       herdrPaneId: "pane-1",
       hostIp: "192.168.1.10",
-      hostProjectName: "my-project",
       profileName: "pi-work",
       profile: sampleProfile({ OCR_LLM_TOKEN_KEY: "OPENCODE_API_KEY" }),
     });
@@ -232,17 +231,16 @@ describe("buildEnvArgs", () => {
     );
   });
 
-  it("全クレデンシャルが env 引数として含まれる(全 17 個)", () => {
+  it("全クレデンシャルが env 引数として含まれる(全 16 個)", () => {
     const envArgs = buildEnvArgs({
       credentials: sampleCredentials(),
       herdrPaneId: "pane-1",
       hostIp: "192.168.1.10",
-      hostProjectName: "my-project",
       profileName: "pi-work",
       profile: sampleProfile(),
     });
     const envCount = envArgs.filter((a) => a.startsWith("--env=")).length;
-    assert.equal(envCount, 17, "17 個の --env 引数");
+    assert.equal(envCount, 16, "16 個の --env 引数");
   });
 
   it("PartialCredentials(一部欠落)でもエラーなく組み立て、欠落した値は空文字として出力する", () => {
@@ -255,7 +253,6 @@ describe("buildEnvArgs", () => {
       credentials: partial,
       herdrPaneId: "pane-1",
       hostIp: "192.168.1.10",
-      hostProjectName: "my-project",
       profileName: "pi-work",
       profile: sampleProfile({ OCR_LLM_TOKEN_KEY: "OPENCODE_API_KEY" }),
     });
@@ -270,7 +267,6 @@ describe("buildEnvArgs", () => {
       credentials: sampleCredentials(),
       herdrPaneId: "pane-1",
       hostIp: "192.168.1.10",
-      hostProjectName: "my-project",
       profileName: "pi-work",
       profile: sampleProfile(),
     });
@@ -283,7 +279,6 @@ describe("buildEnvArgs", () => {
       credentials: sampleCredentials(),
       herdrPaneId: "pane-1",
       hostIp: "192.168.1.10",
-      hostProjectName: "my-project",
       profile: sampleProfile(),
       profileName: "pi-work",
     });
@@ -297,47 +292,53 @@ describe("buildEnvArgs", () => {
 describe("validateFlagCombination", () => {
   it("単独フラグはすべて許可する", () => {
     assert.equal(
-      validateFlagCombination({ attach: false, bash: false, resume: false, session: false }),
+      validateFlagCombination({ attach: false, bash: false, new: false, session: false }),
       undefined,
     );
     assert.equal(
-      validateFlagCombination({ attach: false, bash: true, resume: false, session: false }),
+      validateFlagCombination({ attach: false, bash: true, new: false, session: false }),
       undefined,
     );
     assert.equal(
-      validateFlagCombination({ attach: false, bash: false, resume: true, session: false }),
+      validateFlagCombination({ attach: false, bash: false, new: true, session: false }),
       undefined,
     );
     assert.equal(
-      validateFlagCombination({ attach: false, bash: false, resume: false, session: true }),
+      validateFlagCombination({ attach: false, bash: false, new: false, session: true }),
       undefined,
     );
   });
 
-  it("--resume と --session の同時指定はエラー(--session は再開を内包するため)", () => {
-    const error = validateFlagCombination({ attach: false, bash: false, resume: true, session: true });
-    assert.match(error ?? "", /--resume/);
+  it("--new と --session の同時指定はエラー(--new は新規セッションを指定するため)", () => {
+    const error = validateFlagCombination({ attach: false, bash: false, new: true, session: true });
+    assert.match(error ?? "", /--new/);
     assert.match(error ?? "", /--session/);
   });
 
-  it("--attach と --bash / --resume / --session の同時指定はエラー", () => {
+  it("--attach と --bash / --new / --session の同時指定はエラー", () => {
     assert.match(
-      validateFlagCombination({ attach: true, bash: true, resume: false, session: false }) ?? "",
+      validateFlagCombination({ attach: true, bash: true, new: false, session: false }) ?? "",
       /--attach/,
     );
     assert.match(
-      validateFlagCombination({ attach: true, bash: false, resume: true, session: false }) ?? "",
+      validateFlagCombination({ attach: true, bash: false, new: true, session: false }) ?? "",
       /--attach/,
     );
     assert.match(
-      validateFlagCombination({ attach: true, bash: false, resume: false, session: true }) ?? "",
+      validateFlagCombination({ attach: true, bash: false, new: false, session: true }) ?? "",
       /--attach/,
     );
+  });
+
+  it("--bash と --new の同時指定はエラー(--bash は pi を起動しないため)", () => {
+    const error = validateFlagCombination({ attach: false, bash: true, new: true, session: false });
+    assert.match(error ?? "", /--bash/);
+    assert.match(error ?? "", /--new/);
   });
 
   it("--attach 単独なら許可する", () => {
     assert.equal(
-      validateFlagCombination({ attach: true, bash: false, resume: false, session: false }),
+      validateFlagCombination({ attach: true, bash: false, new: false, session: false }),
       undefined,
     );
   });
