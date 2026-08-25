@@ -104,11 +104,22 @@ RUN npx playwright install --with-deps --only-shell chromium \
 # =========================================================
 # 3. ctx.rs のインストール
 # =========================================================
-# 公式インストールスクリプトを使用
+# 公式インストールスクリプトを使用。
+# CTX_BIN_DIR を明示し、全ユーザーの PATH 上（/usr/local/bin）へ配置。
+# この RUN は root で実行されるため、デフォルト（$HOME/.local/bin）のままだと
+# /root/.local/bin へインストールされ、pi ユーザーからは PATH も権限も届かず
+# 「ctx: command not found」になる（docs/spec/0002-ctx-install.md 参照）。
+# ※ `VAR=x curl ... | sh` では VAR が左辺の curl にしか効かず右辺の sh へ渡らないため、
+#    一旦スクリプトを /tmp へ落としてから環境変数付きで実行する（uv と同一パターン）。
+# オプション:
+# --no-setup: 索引初期化（ctx setup）はビルド時に行わない。Index Data（~/.ctx）は
+#   ホストと virtiofs で共有される破棄禁止資産であり、root の /root/.ctx を作っても無意味。
+# --no-skill: ctx agent スキルはホストの ~/.pi がマウント済みのため重複して入れない。
+# --no-pro-trial: pro 体験版の自動開始という副作用を避ける。
 # サプライチェーンリスク: ダウンロードしたスクリプトを直接実行しているため
 # ctx.rs のエンドポイントが改ざんされた場合に任意コードが実行される可能性あり。
 RUN curl -fsSL -o /tmp/install-ctx.sh https://ctx.rs/install \
-    && sh /tmp/install-ctx.sh \
+    && CTX_BIN_DIR=/usr/local/bin sh /tmp/install-ctx.sh --no-setup --no-skill --no-pro-trial \
     && rm /tmp/install-ctx.sh
 
 # =========================================================

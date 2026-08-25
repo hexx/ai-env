@@ -52,6 +52,16 @@ _Avoid_: workspace（文脈なし）
 CLI の `--session <id>` で直接指定されたセッション。1 回だけ再開される（コンテナ内 `pi-resume` 関数には反映されない）。
 _Avoid_: CLI session（pi の `--session-id` と紛らわしい）, 上書きセッション
 
+## Agent History Search
+
+**Ctx CLI**:
+ctx.rs 製のローカルエージェント履歴検索 CLI（`ctx` コマンド）。サンドボックスには Dockerfile のビルド時に `/usr/local/bin` へ配置され、全ユーザーの PATH から利用できる。索引の初期化（setup）はビルド時に行わず、実行時に Index Data を参照する。
+_Avoid_: ctx.rs（ベンダー名と CLI 名の混同）
+
+**Index Data**:
+Ctx CLI が管理する索引データ（`~/.ctx` 配下の work.sqlite 等）。ホストとサンドボックスで virtiofs 経由により同一実体を共有する破棄禁止の資産であり、コンテナ側から再インデックス・削除を行わない。
+_Avoid_: キャッシュ（破棄可能な一時物と誤解される）, DB（単体では何の DB か不明）
+
 **Resume**:
 既存セッションに接続して pi を起動・切り替える操作。経路は `pi -c`（最新セッションの続行）、`/resume`（プロジェクト内ピッカー）、`--session`（明示セッション）。
 _Avoid_: 引き継ぐ（README の旧表現）, 継続
