@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # デフォルト起動モード用初期化スクリプト
-# 共通初期化 → プロジェクト名で case 解決 → pm2 クリーンアップ
+# 共通初期化 → プロジェクト名で case 解決 → herdr ブリッジ クリーンアップ
 
 {{COMMON_SCRIPT}}
 
@@ -10,5 +10,5 @@ case "$project" in
 {{CASE_BODY}}
 esac
 rc=$?
-pm2 kill
+cleanup_herdr_bridge
 exit $rc

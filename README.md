@@ -45,6 +45,16 @@ container images | grep pi-sandbox
 
 リポジトリで `Dockerfile` が更新された場合は、上記コマンドで再ビルドする。
 
+Dockerfile は npm の `@latest` や curl インストーラ（ctx / herdr / rtk 等）で
+ビルド時に最新版を取得するため、最新版を取り込みたいときはキャッシュバスティングする:
+
+```bash
+container build --build-arg CACHEBUST=$(date +%s) -t pi-sandbox .
+```
+
+`CACHEBUST` の値を変えると npm インストール以降のレイヤー（playwright / ctx / pm2 /
+herdr / rtk）が再実行される。apt（gh）と uv は対象外（詳細は `docs/spec/0004-cachebust.md`）。
+
 ## クレデンシャル
 
 以下のクレデンシャルを実行時に動的に取得する:

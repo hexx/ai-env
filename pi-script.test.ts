@@ -163,6 +163,50 @@ describe("buildInitScript - 共通初期化", () => {
   });
 });
 
+// ===== herdr ブリッジの PM2 縮退運用 =====
+
+describe("buildInitScript - herdr ブリッジの PM2 縮退運用", () => {
+  const baseParams = {
+    defaultApiKeyEnv: undefined,
+    defaultModel: undefined,
+    defaultProvider: undefined,
+    projects: {},
+    workdir: TEST_WORKDIR,
+  };
+
+  it("PM2 起動経路と socat 直接起動のフォールバックを含む", () => {
+    const script = buildInitScript(baseParams);
+    assertShellSyntax(script);
+    assert.match(script, /if command -v pm2/);
+    assert.match(script, /pm2 start socat --name "herdr-socat"/);
+    assert.match(
+      script,
+      /socat UNIX-LISTEN:\/home\/pi\/.config\/herdr\/herdr\.sock,fork,reuseaddr \\\n      TCP:\$\{HOST_IP\}:9123 &/,
+    );
+    assert.match(script, /HERDR_SOCAT_PID=\$!/);
+    assert.match(script, /cleanup_herdr_bridge/);
+  });
+
+  it("PM2 と socat が使えない場合も pi 起動へ進む警告を含む", () => {
+    const script = buildInitScript(baseParams);
+    assertShellSyntax(script);
+    assert.match(script, /socat の起動にも失敗したため、herdr ブリッジなしで続行します/);
+    assert.match(script, /socat が見つからないため、herdr ブリッジなしで続行します/);
+  });
+
+  it("デフォルトモードでは herdr ブリッジのクリーンアップを実行する", () => {
+    const script = buildInitScript(baseParams);
+    assertShellSyntax(script);
+    assert.match(script, /\nrc=\$\?\ncleanup_herdr_bridge\nexit \$rc/);
+  });
+
+  it("bash モードの exec /bin/bash を維持する", () => {
+    const script = buildInitScript({ ...baseParams, bashMode: true });
+    assertShellSyntax(script);
+    assert.match(script, /\nexec \/bin\/bash$/m);
+  });
+});
+
 // ===== apiKeyEnv フォールバック =====
 
 describe("buildInitScript - apiKeyEnv フォールバック", () => {
