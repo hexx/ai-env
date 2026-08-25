@@ -55,7 +55,7 @@ _Avoid_: CLI session（pi の `--session-id` と紛らわしい）, 上書きセ
 ## Agent History Search
 
 **Ctx CLI**:
-ctx.rs 製のローカルエージェント履歴検索 CLI（`ctx` コマンド）。サンドボックスには Dockerfile のビルド時に `/usr/local/bin` へ配置され、全ユーザーの PATH から利用できる。索引の初期化（setup）はビルド時に行わず、実行時に Index Data を参照する。
+ctx.rs 製のローカルエージェント履歴検索 CLI（`ctx` コマンド）。サンドボックスには Dockerfile のビルド時にユーザー領域（`~/.local/bin`）へ pi 所有で配置され、pi の PATH から利用できる（ADR 0007）。索引の初期化（setup）はビルド時に行わず、実行時に Index Data を参照する。
 _Avoid_: ctx.rs（ベンダー名と CLI 名の混同）
 
 **Index Data**:
@@ -65,3 +65,17 @@ _Avoid_: キャッシュ（破棄可能な一時物と誤解される）, DB（�
 **Resume**:
 既存セッションに接続して pi を起動・切り替える操作。経路は `pi -c`（最新セッションの続行）、`/resume`（プロジェクト内ピッカー）、`--session`（明示セッション）。
 _Avoid_: 引き継ぐ（README の旧表現）, 継続
+
+## Tool Ownership
+
+**User-Owned Tool（ユーザー領域ツール）**:
+pi ユーザーが所有者となり `~/.local/bin` 配下にインストールされる CLI ツール（herdr / rtk / pm2 / ctx）。Dockerfile の `USER pi` 以降のステップでインストールされ、権限調整なしで pi から実行できる。pi から改ざん可能（ADR 0007 で受容したトレードオフ）。
+_Avoid_: ローカルツール（ホスト側との混同）, グローバルツール（システム領域と混同）
+
+**System-Owned Tool（システム領域ツール）**:
+root が所有者となり `/usr/local` 配下にインストールされるイメージ基盤系ツール（node / npm / uv / playwright / pi-coding-agent / open-code-review / hunkdiff 等）。全ユーザーの PATH から利用できるが、実行ユーザー視点の権限調整が必要になりがち（ADR 0007）。
+_Avoid_: グローバルツール（root 所有と非 root 所有の区別が曖昧）, イメージツール（Tool Ownership と混同）
+
+**PM2**:
+コンテナ内で herdr 用 `socat` プロセスを管理するプロセスマネージャー。ユーザー領域ツールとして pi が実行し、起動できない場合は socat 直接起動へ縮退する（docs/spec/0003-pm2-runtime.md）。
+_Avoid_: プロセス監視（PM2 を指さない汎用語）

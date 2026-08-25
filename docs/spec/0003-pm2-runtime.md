@@ -21,6 +21,20 @@ Dockerfile では PM2 を root でグローバル npm インストールし、�
 1. 正常なイメージでは、root 所有の PM2 を `pi` ユーザーが確実に実行できるようにする
 2. 予期せず PM2 が実行できない場合でも、herdr 連携を可能な範囲で維持し、pi の作業環境を起動する
 
+### ビルド時検証の失敗と方針転換（追記）
+
+`85bc3c8` で追加したビルド時検証 `command -v pm2 && pm2 --version` が exit 127 で失敗した。
+下記「ビルド時検証」の通り、このイメージの `/bin/sh` は dash であり `command -v` は
+対象が未発見・解決不能のとき exit 127 を返す。そのため失敗内容は「pm2 が実行できない」
+ではなく「pm2 が PATH 上に存在しないか、bin リンクが壊れている」ことを意味しており、
+`pm2 --version` は実行されていない（0.1 秒で終了するのもこのため）。
+
+根因は root 所有 `/usr/local` と実行ユーザー pi の権限摩擦の再発である
+（1 回目は実行時の「command not found / Permission denied」、2 回目はビルド時検証での
+顕在化）。chmod による事後調整（旧 Dockerfile 仕様）を続ける対症療法をやめ、
+PM2 のインストール先をユーザー領域（pi 所有の `~/.local/bin`）へ移す方針へ転換した
+（docs/adr/0007-tool-install-location.md）。本仕様の後続章はこの方針に基づく。
+
 ## 用語
 
 - **PM2**: コンテナ内で herdr 用 `socat` プロセスを管理する Node.js プロセスマネージャー
@@ -78,29 +92,36 @@ Dockerfile では PM2 を root でグローバル npm インストールし、�
 
 ### インストールと権限
 
-- PM2 は root 所有の `/usr/local` にインストールする
-- `/usr/local/lib/node_modules/pm2` 全体を `pi` から読み取り可能にする
-- PM2 パッケージの `bin` 配下を `pi` から実行可能にする
-- `/usr/local/bin` を PATH に明示する
-- root 所有は維持し、pi ユーザーによる PM2 の改ざんは許可しない
+- PM2 は `USER pi` 後に `npm install -g --prefix /home/pi/.local pm2@latest` で
+  ユーザー領域（pi 所有の `~/.local/bin`）へインストールする
+  （root 所有の `/usr/local` は使わない。docs/adr/0007 参照）
+- 実行権限・読み取り権限の調整（旧仕様の chmod 群）は不要。所有者が pi 自身のため
+- `PATH` に `/home/pi/.local/bin` を含める（既存の `ENV PATH` で設定済み。herdr / rtk と同経路）
+- pm2 デーモンのランタイムデータ（`~/.pm2`）は pi のホーム配下に作られる
 
 ### ビルド時検証
 
 `USER pi` 後に次を実行する。
 
 ```bash
-command -v pm2
-pm2 --version
+pm2 --version \
+  || { echo "エラー: pi ユーザーが PM2 を実行できません（解決結果: $(command -v pm2 || echo 'なし')、PATH: $PATH）" >&2; exit 1; }
 ```
 
 この検証に失敗するイメージは完成品として扱わず、実行時まで問題を持ち越さない。
 
+判定は「実際に実行できること」であり、`command -v` による存在確認を前置しない。
+理由: このイメージの `/bin/sh` は dash であり、`command -v` は対象が未発見・解決不能のとき
+exit 127 を返す（bash では 1）。そのため `command -v pm2 && pm2 --version` という形では
+「PATH に見つからない」「壊れたシンボリックリンク」のどちらでも `pm2 --version` が
+実行されないまま 127 で終了し、エラー内容が診断に役立たない。
+`pm2 --version` は pm2 デーモンを起動しないため、ビルド時の実行は安全である。
+
 ## 実装対象
 
 - `Dockerfile`
-  - PM2 パッケージの読み取り・実行権限の正規化
-  - `/usr/local/bin` を含む PATH の明示
-  - `USER pi` 後の PM2 ビルド時検証
+  - ユーザー領域（`~/.local/bin`）への PM2 インストール（npm `--prefix`）
+  - `USER pi` 後の PM2 ビルド時検証（`pm2 --version` 実行方式）
 - `templates/common.sh.template`
   - PM2 起動結果の判定
   - socat 直接起動フォールバック
@@ -130,7 +151,7 @@ npx oxlint
 ```bash
 container build --no-cache -t pi-sandbox .
 container run --rm --entrypoint /bin/bash pi-sandbox -lc '
-  command -v pm2 && pm2 --version
+  pm2 --version
 '
 ```
 
@@ -160,4 +181,5 @@ PM2 と socat の両方を実行不能にした場合は、警告後に pi が�
 - herdr 側のプロトコル変更
 - PM2 以外のグローバル npm パッケージの権限ポリシー変更
 - PM2 が利用できない場合の自動修復や再インストール
+- 旧方式（root 所有 `/usr/local` へのインストール）の再導入
 - ADR の追加

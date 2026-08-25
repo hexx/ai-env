@@ -6,6 +6,11 @@ created: 2026-08-25T22:23:00+09:00
 
 # CI へのコンテナ内 ctx 起動確認の組込み
 
+> ※ 記録メモ: 本 issue 作成時点では ctx は `/usr/local/bin` へインストールする方式だった。
+>   その後ビルド時検証の問題を機に、インストール先はユーザー領域（pi の `~/.local/bin`）へ
+>   変更された（docs/adr/0007-tool-install-location.md / docs/spec/0002-ctx-install.md）。
+>   CI で検証する「期待される動作」自体は変わらない。
+
 ## 背景・前提条件 (Context)
 
 ### 期待される挙動 vs 実際の挙動

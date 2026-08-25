@@ -22,6 +22,25 @@ pi ユーザー（PATH=`/home/pi/.local/bin:/usr/local/sbin:...`）からは PAT
 herdr / rtk は `USER pi` 切替後にインストールして `~/.local/bin` に入る設計だった。
 ctx だけがどちらのパターンにも乗っていなかったことが破綻点。
 
+### インストーラーの設計変更（2026-08）
+
+その後、ctx.rs 公式インストーラーはインストール先を「実行ユーザー所有」に限定し、
+インストール先ディレクトリを `chmod 0700` する単一ユーザー前提の設計へ変更された:
+
+```sh
+[ "$bin_dir_owner" = "$(id -u)" ] ||
+  fail "ctx install directory must be owned by the current user"
+chmod 0700 "$secure_bin_dir" || fail "could not secure the ctx install directory"
+```
+
+`CTX_BIN_DIR=/usr/local/bin` による root 実行は所有者チェックは通るが、
+`/usr/local/bin` 全体が 0700 になり pi は node / uv / pi を含む全システム領域ツールを
+実行できなくなる（`pi update --all` 等が最初に失敗する）。したがって、
+`/usr/local/bin` への配置はインストーラーの想定利用法に反し、維持できない。
+
+これは「uv と同じパターン」とみなしていた前提（下記 修正仕様）の誤りであり、
+uv（astral）と ctx.rs ではインストーラーの設計思想が異なる（docs/adr/0007 参照）。
+
 ### スコープ
 
 本仕様は **サンドボックス内限定** の修復を扱う。ホスト（macOS）側の ctx は
@@ -38,9 +57,11 @@ config.toml の `[upgrade] auto = "apply"` により 0.25.0 → 1.0.2 へ自動�
 
 ### インストール先
 
-- `CTX_BIN_DIR=/usr/local/bin` を明示し、全ユーザーの PATH 上へ配置する
-- Dockerfile 内の既存パターン（uv の `UV_INSTALL_DIR=/usr/local/bin`）と同一方針
-- `/usr/local/bin` は root 所有のため、pi ユーザーによるバイナリ改ざんも不可（Playwright ブラウザと同じ思想）
+- `USER pi` の後に公式インストーラーを実行し、既定の `$HOME/.local/bin`（=`/home/pi/.local/bin`）へ配置する
+- `CTX_BIN_DIR` の指定は不要（インストーラー既定がユーザー領域のため）
+- インストール先の根拠は「実行ユーザーが使うパーソナル CLI はユーザー領域へ」という方針
+  （docs/adr/0007）。インストーラーの所有者制約・0700 化とも整合する
+- `~/.local/bin` は既に `ENV PATH` で pi の PATH に含まれている（herdr / rtk と同経路）
 
 ### インストーラーオプション
 
@@ -50,8 +71,9 @@ config.toml の `[upgrade] auto = "apply"` により 0.25.0 → 1.0.2 へ自動�
 | `--no-skill` | ctx agent スキルはホストの `~/.pi` がコンテナへマウント済み（`index-helpers.ts` の volume マウント）のため重複して入れない |
 | `--no-pro-trial` | pro 体験版の自動開始という副作用を避ける |
 
-※ `VAR=x curl ... | sh` 形式では変数が curl 側にしか渡らないため、uv と同様に
-スクリプトを `/tmp` へダウンロードしてから `CTX_BIN_DIR=... sh /tmp/install-ctx.sh` として実行する。
+※ `VAR=x curl ... | sh` 形式では変数が curl 側にしか渡らない。今回の方式は
+`CTX_BIN_DIR` 指定が不要になったため、スクリプトを `/tmp` へダウンロードしてから
+`sh /tmp/install-ctx.sh` として実行し、`&&` で失敗を検出する（uv と同様の安全策を維持）。
 
 ### バージョン方針
 
@@ -73,14 +95,14 @@ config.toml の `[upgrade] auto = "apply"` により 0.25.0 → 1.0.2 へ自動�
 
 ```bash
 ctx --version              # バイナリが pi の PATH 上にあること
-which ctx                  # /usr/local/bin/ctx であること
+which ctx                  # /home/pi/.local/bin/ctx であること
 ctx status                 # /home/pi/.ctx（ホスト共有 Index Data）を参照できること
 ctx search "<既知の語>"    # ホスト側セッションが検索できること
 ```
 
 ## 実装箇所
 
-- `Dockerfile` — 「3. ctx.rs のインストール」RUN ブロック
+- `Dockerfile` — ユーザー領域ツールのインストール（herdr / rtk と同じ `USER pi` セクション）
 
 ## 非スコープ
 
