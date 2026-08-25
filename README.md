@@ -55,6 +55,44 @@ container build --build-arg CACHEBUST=$(date +%s) -t pi-sandbox .
 `CACHEBUST` の値を変えると npm インストール以降のレイヤー（playwright / ctx / pm2 /
 herdr / rtk）が再実行される。apt（gh）と uv は対象外（詳細は `docs/spec/0004-cachebust.md`）。
 
+## Ctx の Pi 履歴取り込み
+
+Pi のセッション履歴は、ホスト側の Ctx CLI が Index Data（`~/.ctx`）へ取り込みます。
+サンドボックス内の Ctx は検索クライアントとして動作し、Index Data を更新しません。
+詳細は [`docs/spec/0005-ctx-pi-history-import.md`](./docs/spec/0005-ctx-pi-history-import.md) を参照してください。
+
+### 初回設定（ホスト側）
+
+```bash
+ctx status
+ctx sources --provider pi --format json
+ctx import --provider pi
+ctx index mode auto
+ctx status
+```
+
+ホスト側でも Pi 履歴の自動検出に失敗した場合だけ、正規パスを明示して実行します。
+
+```bash
+ctx import --provider pi --path "$HOME/.pi/agent/sessions"
+```
+
+通常はホスト側の Ctx 自動インデックスが更新を行います。手動更新が必要な場合はホスト側で
+`ctx import --provider pi` を実行してください。サンドボックスの起動時に import は行いません。
+
+### サンドボックス内の検索
+
+サンドボックスでは、Index Data の更新を起こさないよう `--refresh off` を指定します。
+
+```bash
+ctx search "検索したい内容" --refresh off
+ctx status
+```
+
+Index Data の鮮度や Pi 履歴ソースの状態を確認する場合は、ホスト側で `ctx status`、
+`ctx index`、`ctx sources --provider pi` を実行してください。過去セッションの古い
+`parentSession` パスは自動修正せず、必要な場合だけ別途手動移行します。
+
 ## クレデンシャル
 
 以下のクレデンシャルを実行時に動的に取得する:
