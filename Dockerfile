@@ -69,6 +69,8 @@ RUN curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv-install.sh \
 #   失敗する場合があるため @latest
 # - pm2 は herdr-socat プロセスの管理に使用
 # - --no-cache でレイヤにnpmキャッシュを残さない(イメージサイズ削減)
+# root でグローバルインストールした PM2 は、root 所有を維持したまま
+# pi ユーザーが読み取り・実行できる権限に正規化する。
 # ARG CACHEBUST を変更するとこの行以降のレイヤーが再実行される。
 ARG CACHEBUST=1
 RUN npm install -g --no-cache \
@@ -76,7 +78,10 @@ RUN npm install -g --no-cache \
         @earendil-works/pi-coding-agent@latest \
         @alibaba-group/open-code-review@latest \
         hunkdiff@latest \
-        pm2@latest
+        pm2@latest \
+    && chmod a+rx /usr/local/lib /usr/local/lib/node_modules \
+    && chmod -R a+rX /usr/local/lib/node_modules/pm2 \
+    && find /usr/local/lib/node_modules/pm2/bin -type f -exec chmod a+rx {} +
 
 # Playwrightブラウザ本体と依存ライブラリのインストール。
 # パーミッションは 755 とし、pi ユーザーがブラウザバイナリを実行できるが
@@ -159,7 +164,12 @@ RUN git config --global --add safe.directory '/workspace/*'
 # herdr用環境変数とパスの設定
 ENV HERDR_ENV=1 \
     HERDR_SOCKET_PATH=/home/pi/.config/herdr/herdr.sock \
-    PATH="/home/pi/.local/bin:${PATH}"
+    PATH="/usr/local/bin:/home/pi/.local/bin:${PATH}"
+
+# 実行ユーザー pi から、root でインストールした PM2 を実行できることを
+# イメージビルド時に検証する。権限や PATH が壊れたイメージを実行時まで残さない。
+RUN command -v pm2 \
+    && pm2 --version
 
 # デフォルトの起動コマンド
 CMD ["bash"]

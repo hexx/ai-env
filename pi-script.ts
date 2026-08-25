@@ -223,8 +223,8 @@ if [ -n "\${HERDR_PANE_ID:-}" ]; then
 fi`;
 
 // コンテナ起動直後にコンテナ内で実行する初期化スクリプトを生成。
-// SSH 鍵セットアップ → pm2 管理下の socat ブリッジ → pi-resume 関数定義 → pi 起動の順。
-// pi 終了時に pm2 をクリーンアップしてコンテナを終了する。
+// SSH 鍵セットアップ → PM2 または直接起動の socat ブリッジ → pi-resume 関数定義 → pi 起動の順。
+// pi 終了時に herdr ブリッジをクリーンアップしてコンテナを終了する。
 export const buildInitScript = (params: {
   projects: Record<string, ProjectConfig>;
   defaultProvider: string | undefined;
