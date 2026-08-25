@@ -84,20 +84,23 @@ config.toml の `[upgrade] auto = "apply"` により 0.25.0 → 1.0.2 へ自動�
 ## 動作仕様
 
 - コンテナ内で `ctx --version` が応答する（pi ユーザーから）
-- `ctx search` はマウントされた `/home/pi/.ctx`（= ホスト `~/.ctx` の同一実体）を参照する
-  （`index-helpers.ts`: `--volume=${home}/.ctx:/home/pi/.ctx` により実現。今回の変更対象外）
-- 索引の初期化・再構築が必要になった場合は、実行時にユーザー自身が `ctx setup` を実行する（ビルド時は行わない）
+- `/home/pi/.ctx` はホストの `~/.ctx` と同一実体を参照するが、サンドボックス側では読み取り専用とする
+  （実装要求は `docs/spec/0005-ctx-pi-history-import.md` を参照）
+- サンドボックス内の検索は `--refresh off` を指定し、Index Data の更新を起こさない
+- Pi 履歴の `setup` / `import` / `index mode` はホスト側でのみ実行する
+- 索引の初期化・再構築は Docker イメージのビルド時にも、サンドボックス起動時にも行わない
 
 ## 検証手順
 
-1. ホスト側でイメージを再ビルドする
-2. コンテナ内で以下を確認する:
+1. ホスト側で Pi 履歴の初回取り込みを行う（詳細は `docs/spec/0005-ctx-pi-history-import.md`）
+2. ホスト側でイメージを再ビルドする
+3. コンテナ内で以下を確認する:
 
 ```bash
-ctx --version              # バイナリが pi の PATH 上にあること
-which ctx                  # /home/pi/.local/bin/ctx であること
-ctx status                 # /home/pi/.ctx（ホスト共有 Index Data）を参照できること
-ctx search "<既知の語>"    # ホスト側セッションが検索できること
+ctx --version                           # バイナリが pi の PATH 上にあること
+which ctx                               # /home/pi/.local/bin/ctx であること
+ctx status                              # /home/pi/.ctx を読み取れること
+ctx search "<既知の語>" --refresh off    # ホスト側で取り込んだセッションを検索できること
 ```
 
 ## 実装箇所

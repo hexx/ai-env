@@ -55,12 +55,24 @@ _Avoid_: CLI session（pi の `--session-id` と紛らわしい）, 上書きセ
 ## Agent History Search
 
 **Ctx CLI**:
-ctx.rs 製のローカルエージェント履歴検索 CLI（`ctx` コマンド）。サンドボックスには Dockerfile のビルド時にユーザー領域（`~/.local/bin`）へ pi 所有で配置され、pi の PATH から利用できる（ADR 0007）。索引の初期化（setup）はビルド時に行わず、実行時に Index Data を参照する。
+ctx.rs 製のローカルエージェント履歴検索 CLI（`ctx` コマンド）。ホスト側で履歴を Index Data に取り込み、サンドボックス内では検索クライアントとして利用する（ADR 0007、ADR 0009）。
 _Avoid_: ctx.rs（ベンダー名と CLI 名の混同）
 
 **Index Data**:
-Ctx CLI が管理する索引データ（`~/.ctx` 配下の work.sqlite 等）。ホストとサンドボックスで virtiofs 経由により同一実体を共有する破棄禁止の資産であり、コンテナ側から再インデックス・削除を行わない。
+Ctx CLI が管理する索引データ（`~/.ctx` 配下）。ホストとサンドボックスで virtiofs 経由により同一実体を共有する破棄禁止の資産であり、ホスト側の Ctx CLI を書き込み主体とし、サンドボックス側から再インデックス・削除を行わない。
 _Avoid_: キャッシュ（破棄可能な一時物と誤解される）, DB（単体では何の DB か不明）
+
+**Pi History Source**:
+ホストの `~/.pi/agent/sessions/` に保存される、全プロジェクトの Pi セッション JSONL。Ctx が取り込みの読み取り元とする正規の履歴ソースであり、バックアップディレクトリは通常の対象に含めない。
+_Avoid_: チャット履歴, セッションのコピー
+
+**Import**:
+Pi History Source を読み取り、ホスト側の Index Data に検索可能な世代として反映する処理。セッションファイル自体の修正・移動・削除は行わない。
+_Avoid_: セッション移行, コピー
+
+**Search Client**:
+サンドボックス内で Index Data を読み取り、履歴を検索・表示する Ctx CLI の役割。Index Data の更新や Pi History Source の取り込みは担当しない。
+_Avoid_: インデクサー, 履歴管理者
 
 **Resume**:
 既存セッションに接続して pi を起動・切り替える操作。経路は `pi -c`（最新セッションの続行）、`/resume`（プロジェクト内ピッカー）、`--session`（明示セッション）。
