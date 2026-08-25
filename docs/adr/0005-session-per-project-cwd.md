@@ -12,9 +12,10 @@ cd してから pi を起動する方式を採用した。
   これにより pi-projects.json の `session` 固定（`ai-env --resume`）と、保存記録ベースの
   `/save-session` / `/resume-session` は廃止した（ADR 0004 を supersede）。セッション再開は
   `pi -c`（前回の続き）、`/resume`（プロジェクト内ピッカー）、`ai-env --session <id>`（明示）で実現する。
-- **マウント先は `/workspace/<basename>`**: シンプルさを優先。ホストのフルパス再現（ホストの pi と
-  セッション共有）やハッシュ付与は採用しない。同名 basename の衝突は既存の projects キーと同じく
-  basename が被らない運用で担保する（検証は SAFE_SHELL_PATTERN のみ）。
+- **作業ディレクトリのマウント先は `/workspace/<basename>`**: シンプルさを優先し、cwd のホスト
+  フルパス再現やハッシュ付与は採用しない。同名 basename の衝突は既存の projects キーと同じく
+  basename が被らない運用で担保する（検証は SAFE_SHELL_PATTERN のみ）。なお、セッションファイルの
+  `parentSession` をホストの ctx から解決可能にするための保存先パス整合は ADR 0008 で別途定める。
 - **cd は init スクリプト（common.sh.template）で行う**: `--workdir` フラグは container CLI の
   対応可否が不明なため、ランタイム非依存の方法を採用。`--bash` モードでも cwd が正しい状態になる。
 - **HOST_PROJECT_NAME 環境変数を廃止**: プロジェクト名は `$(basename "$PWD")` で解決できる。

@@ -32,6 +32,13 @@ const CONTAINER_PI_HOME = "/home/pi/.pi";
 const CONTAINER_RTK_CONFIG = "/home/pi/.rtk";
 const CONTAINER_CTX = "/home/pi/.ctx";
 
+// pi は子セッションのヘッダーに parentSession としてセッションファイルの絶対パスを
+// 保存する。コンテナ内の /home/pi/.pi/agent/sessions をそのまま使うと、ホスト側の
+// ctx が /Users/.../.pi/agent/sessions から親を解決できないため、ホストと同じ絶対パスを
+// コンテナ内からも見せる。
+export const hostPiSessionDir = (home: string): string =>
+  `${home}/.pi/agent/sessions`;
+
 // ===== 型 =====
 
 export interface CredentialSource {
@@ -260,6 +267,12 @@ export const buildEnvArgs = (params: {
   ];
 };
 
+// pi のセッション保存先をホストと同じ絶対パスに固定する。pi はこの値を
+// セッションディレクトリとして使い、parentSession にホストからも解決できるパスを書く。
+export const buildPiSessionEnvArgs = (home: string): string[] => [
+  `--env=PI_CODING_AGENT_SESSION_DIR=${hostPiSessionDir(home)}`,
+];
+
 // プロジェクトごとのコンテナ内ワークスペースパス(/workspace/<プロジェクト名>)。
 // マウント先(buildVolumeArgs)とコンテナ内 cwd(workdir)の両方で使用する。
 // 2 箇所で独立に構築するとズレた場合にコンテナの cwd が未マウントのディレクトリを
@@ -274,6 +287,10 @@ export const buildVolumeArgs = (home: string, projectName: string): string[] => 
   `--volume=${process.cwd()}:${projectWorkspacePath(projectName)}`,
   `--volume=${home}/.ssh:${CONTAINER_SSH}:ro`,
   `--volume=${home}/.pi:${CONTAINER_PI_HOME}`,
+  // 上記の .pi マウントとは別に、pi が parentSession に書くホスト絶対パスも
+  // コンテナ内で有効にする。二重マウントだが、設定/拡張機能は従来どおり
+  // /home/pi/.pi から参照し、セッションだけはホストパスを正本として扱う。
+  `--volume=${hostPiSessionDir(home)}:${hostPiSessionDir(home)}`,
   `--volume=${home}/.config/rtk:${CONTAINER_RTK_CONFIG}`,
   `--volume=${home}/.ctx:${CONTAINER_CTX}`,
 ];
@@ -453,13 +470,16 @@ export const runContainerCommand = (ctx: RunContext): number => {
   if (ctx.attachMode) {
     return attachToContainer(ctx.hostProjectName, env);
   }
-  const envArgs = buildEnvArgs({
-    credentials: ctx.credentials,
-    herdrPaneId: ctx.herdrPaneId,
-    hostIp: ctx.hostIp,
-    profile: ctx.profile,
-    profileName: ctx.profileName,
-  });
+  const envArgs = [
+    ...buildEnvArgs({
+      credentials: ctx.credentials,
+      herdrPaneId: ctx.herdrPaneId,
+      hostIp: ctx.hostIp,
+      profile: ctx.profile,
+      profileName: ctx.profileName,
+    }),
+    ...buildPiSessionEnvArgs(ctx.home),
+  ];
   const volumeArgs = buildVolumeArgs(ctx.home, ctx.hostProjectName);
   const initScript = buildInitScript({
     bashMode: ctx.bashMode,
