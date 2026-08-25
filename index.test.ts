@@ -25,6 +25,7 @@ import {
   buildContainerName,
   buildContainerProcessEnv,
   buildEnvArgs,
+  buildPiSessionEnvArgs,
   buildVolumeArgs,
   findContainerByLabel,
   detectProfileName,
@@ -172,15 +173,29 @@ describe("buildVolumeArgs", () => {
     assert.match(sshArg!, /:ro$/, "末尾が :ro で終わる(読み取り専用)");
   });
 
-  it("5 つのボリュームマウントが含まれる(cwd, .ssh, .pi, .config/rtk, .ctx)", () => {
+  it("6 つのボリュームマウントが含まれる(cwd, .ssh, .pi, セッション, .config/rtk, .ctx)", () => {
     const args = buildVolumeArgs("/Users/test", "my-project");
     const volumeArgs = args.filter((a) => a.startsWith("--volume="));
-    assert.equal(volumeArgs.length, 5, "5 つの --volume 引数");
+    assert.equal(volumeArgs.length, 6, "6 つの --volume 引数");
     assert.ok(volumeArgs.some((a) => a.endsWith(":/workspace/my-project")), "cwd → /workspace/my-project");
     assert.ok(volumeArgs.some((a) => a.includes("/Users/test/.ssh")), ".ssh の絶対パス");
     assert.ok(volumeArgs.some((a) => a.endsWith(":/home/pi/.pi")), ".pi → /home/pi/.pi");
+    assert.ok(
+      volumeArgs.some((a) => a.endsWith(":/Users/test/.pi/agent/sessions")),
+      "セッション → ホストと同じ絶対パス",
+    );
     assert.ok(volumeArgs.some((a) => a.endsWith(":/home/pi/.rtk")), ".config/rtk → /home/pi/.rtk");
     assert.ok(volumeArgs.some((a) => a.endsWith(":/home/pi/.ctx")), ".ctx → /home/pi/.ctx");
+  });
+});
+
+// ===== buildPiSessionEnvArgs =====
+
+describe("buildPiSessionEnvArgs", () => {
+  it("pi のセッション保存先をホストと同じ絶対パスに設定する", () => {
+    assert.deepEqual(buildPiSessionEnvArgs("/Users/test"), [
+      "--env=PI_CODING_AGENT_SESSION_DIR=/Users/test/.pi/agent/sessions",
+    ]);
   });
 });
 

@@ -37,7 +37,7 @@ _Avoid_: 無視された報告（受理はされている）
 ## Sessions
 
 **Session**:
-pi の会話の単位。UUID で識別され（部分一致も可）、ホストの `~/.pi/agent/sessions/` にセッション開始時の cwd ごとに JSONL として保存される。コンテナ内では cwd がプロジェクトごとに分かれているため（Project Directory）、セッションもプロジェクト単位で整理される。
+pi の会話の単位。UUID で識別され（部分一致も可）、ホストの `~/.pi/agent/sessions/` にセッション開始時の cwd ごとに JSONL として保存される。コンテナ内では cwd がプロジェクトごとに分かれているため（Project Directory）、セッションもプロジェクト単位で整理される。コンテナ内 pi の保存先も `PI_CODING_AGENT_SESSION_DIR` でホストと同じ絶対パスに合わせ、子セッションの `parentSession` をホストの ctx から解決可能にする（ADR 0008）。
 _Avoid_: チャット履歴, 会話ログ
 
 **Project Name**:
