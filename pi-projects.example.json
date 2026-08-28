@@ -3,24 +3,48 @@
   // 各プロファイルに OCR 全体設定を記述
   "profiles": {
     "pi-private": {
+      // このProfileでKeychainから取得し、コンテナへ渡してよいクレデンシャル。
+      // OPENAI_API_KEYを追加済み。ZAI_API_KEYは対象外。
+      "credentialKeys": [
+        "BRAVE_SEARCH_API_KEY",
+        "DEEPSEEK_API_KEY",
+        "GH_TOKEN",
+        "JINA_API_KEY",
+        "LLM_API_KEY",
+        "OPENAI_API_KEY",
+        "OPENCODE_API_KEY",
+        "OPENROUTER_API_KEY",
+        "QWEN_TOKEN_PLAN_API_KEY",
+        "XIAOMI_TOKEN_PLAN_SGP_API_KEY"
+      ],
       "OCR_USE_ANTHROPIC": "false",
       // OpenCode のエンドポイント
       "OCR_LLM_URL": "https://opencode.ai/zen/go/v1",
       "OCR_LLM_TOKEN_KEY": "OPENCODE_API_KEY",
       "OCR_LLM_MODEL": "mimo-v2.5-pro"
-    },
-    "pi-work": {
-      "OCR_USE_ANTHROPIC": "true",
-      "OCR_LLM_URL": "https://api.anthropic.com/v1/messages",
-      "OCR_LLM_TOKEN_KEY": "WORK_API_KEY",
-      "OCR_LLM_MODEL": "claude-3-5-sonnet-20241022",
-      // デフォルトの provider/model (プロジェクト側で未指定の場合にフォールバック)
-      "provider": "anthropic",
-      "model": "claude-3-5-sonnet-20241022",
-      // デフォルトの apiKeyEnv (プロジェクト側で未指定の場合にフォールバック)。
-      // コンテナ内で '--api-key "$WORK_API_KEY"' として参照される環境変数名。
-      "apiKeyEnv": "WORK_API_KEY"
+      // GPT-5.6 LunaをProfileのデフォルトにする場合は、上記Profileへ次を追加する。
+      // "provider": "openai",
+      // "model": "gpt-5.6-luna",
+      // "apiKeyEnv": "OPENAI_API_KEY"
     }
+    // 仕事用Profileの例（非アクティブ）。
+    // WORK_API_KEYは現在のCREDENTIAL_SOURCESに登録されていないため、
+    // 実際に使う場合は取得元を別途実装してから、Profileへ追加する。
+    // "pi-work": {
+    //   "credentialKeys": [
+    //     "BRAVE_SEARCH_API_KEY",
+    //     "GH_TOKEN",
+    //     "JINA_API_KEY",
+    //     "WORK_API_KEY"
+    //   ],
+    //   "OCR_USE_ANTHROPIC": "true",
+    //   "OCR_LLM_URL": "https://api.anthropic.com/v1/messages",
+    //   "OCR_LLM_TOKEN_KEY": "WORK_API_KEY",
+    //   "OCR_LLM_MODEL": "claude-3-5-sonnet-20241022",
+    //   "provider": "anthropic",
+    //   "model": "claude-3-5-sonnet-20241022",
+    //   "apiKeyEnv": "WORK_API_KEY"
+    // }
   },
   // プロジェクトごとの pi 起動設定
   // 各プロジェクトに provider / model / apiKeyEnv を任意で指定。

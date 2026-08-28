@@ -10,8 +10,13 @@ import {
   type ProjectConfig,
   buildInitScript,
   loadAiEnvConfig,
+  validateProfileCredentialAccess,
 } from "./pi-projects";
-import { SAFE_SHELL_PATTERN } from "./pi-types";
+import {
+  CREDENTIAL_NAMES,
+  SAFE_SHELL_PATTERN,
+  type CredentialName,
+} from "./pi-types";
 import { execFileSync, spawnSync } from "node:child_process";
 import { basename } from "node:path";
 import { platform } from "node:os";
@@ -44,7 +49,7 @@ export const hostPiSessionDir = (home: string): string =>
 export interface CredentialSource {
   args: string[];
   file: string;
-  name: string;
+  name: CredentialName;
 }
 
 // execFileSync をテスト時にモックできるよう、依存性注入用の関数型を定義。
@@ -103,6 +108,11 @@ export const CREDENTIAL_SOURCES: CredentialSource[] = [
     name: "LLM_API_KEY",
   },
   {
+    args: ["find-generic-password", "-s", "OPENAI_API_KEY", "-w"],
+    file: "security",
+    name: "OPENAI_API_KEY",
+  },
+  {
     args: ["find-generic-password", "-s", "OPENCODE_API_KEY", "-w"],
     file: "security",
     name: "OPENCODE_API_KEY",
@@ -129,13 +139,10 @@ export const CREDENTIAL_SOURCES: CredentialSource[] = [
   },
 ];
 
-// Credentials 型を CREDENTIAL_SOURCES から導出。
-// CREDENTIAL_SOURCES に新エントリを追加すれば型も自動拡張されるため、
-// interface と配列の不整合による型漏れを構造的に防止できる。
-export type Credentials = Record<
-  (typeof CREDENTIAL_SOURCES)[number]["name"],
-  string
->;
+// Credentials 型は CREDENTIAL_NAMES の登録一覧から導出する。
+// CREDENTIAL_SOURCES は各Credential Keyの取得方法を定義し、Profileの
+// credentialKeys と同じ CredentialName 型で整合性を保つ。
+export type Credentials = Record<CredentialName, string>;
 
 // ベストエフォート取得 / 部分的なテストを容易にするための型。
 // 必須キーが欠落する可能性を許容する。
@@ -230,41 +237,80 @@ export const detectProfileName = (
   );
 };
 
+const getAllowedCredentialEntries = (
+  credentials: PartialCredentials,
+  allowedNames: readonly CredentialName[],
+): Array<{ name: CredentialName; value: string }> => {
+  const allowed = new Set(allowedNames);
+  const entries: Array<{ name: CredentialName; value: string }> = [];
+  for (const { name } of CREDENTIAL_SOURCES) {
+    if (!allowed.has(name)) continue;
+    const value = credentials[name];
+    if (value) entries.push({ name, value });
+  }
+  return entries;
+};
+
 export const buildEnvArgs = (params: {
   credentials: PartialCredentials;
   herdrPaneId: string;
   hostIp: string;
   profile: ProfileConfig;
   profileName: string;
+  requiredApiKeyEnv?: string;
 }): string[] => {
-  // profile.OCR_LLM_TOKEN_KEY で指定されたクレデンシャルを取り出して OCR_LLM_TOKEN に注入。
-  // 未定義なら明確なエラーで停止(undefined 文字列が注入されるのを防ぐ)。
-  // OCR_LLM_TOKEN_KEY はコード上は profile 側に存在するものとして扱われるため、
-  // 該当するクレデンシャルがロードされていなければエラー。
-  const ocrToken = params.credentials[params.profile.OCR_LLM_TOKEN_KEY];
-  if (!ocrToken) {
+  const allowedKeys = new Set(params.profile.credentialKeys);
+  const ocrCredentialName = params.profile.OCR_LLM_TOKEN_KEY as CredentialName;
+  if (!CREDENTIAL_NAMES.includes(ocrCredentialName) || !allowedKeys.has(ocrCredentialName)) {
     throw new Error(
-      `プロファイルが参照するクレデンシャル '${params.profile.OCR_LLM_TOKEN_KEY}' が CREDENTIAL_SOURCES に存在しないか、取得に失敗しました。`,
+      `プロファイル '${params.profileName}' の OCR_LLM_TOKEN_KEY '${params.profile.OCR_LLM_TOKEN_KEY}' が credentialKeys に含まれていません。`,
     );
   }
-  return [
+
+  // OCR_LLM_TOKEN_KEY で指定されたクレデンシャルを取り出して OCR_LLM_TOKEN に注入。
+  // 未取得なら明確なエラーで停止(undefined 文字列が注入されるのを防ぐ)。
+  const ocrToken = params.credentials[ocrCredentialName];
+  if (!ocrToken) {
+    throw new Error(
+      `プロファイルが参照するクレデンシャル '${params.profile.OCR_LLM_TOKEN_KEY}' が取得できません。macOS Keychain の登録状態を確認してください。`,
+    );
+  }
+
+  if (params.requiredApiKeyEnv !== undefined) {
+    const requiredCredentialName = params.requiredApiKeyEnv as CredentialName;
+    if (!CREDENTIAL_NAMES.includes(requiredCredentialName) || !allowedKeys.has(requiredCredentialName)) {
+      throw new Error(
+        `選択された apiKeyEnv '${params.requiredApiKeyEnv}' が Profile '${params.profileName}' の credentialKeys に含まれていません。`,
+      );
+    }
+    if (!params.credentials[requiredCredentialName]) {
+      throw new Error(
+        `選択されたクレデンシャル '${params.requiredApiKeyEnv}' が取得できません。macOS Keychain の登録状態を確認してください。`,
+      );
+    }
+  }
+
+  const allowedCredentialEntries = getAllowedCredentialEntries(
+    params.credentials,
+    params.profile.credentialKeys,
+  );
+  const envArgs = [
     `--env=HERDR_PANE_ID=${params.herdrPaneId}`,
     `--env=HOST_IP=${params.hostIp}`,
     `--env=AI_ENV_PROFILE=${params.profileName}`,
     `--env=OCR_USE_ANTHROPIC=${params.profile.OCR_USE_ANTHROPIC}`,
     `--env=OCR_LLM_URL=${params.profile.OCR_LLM_URL}`,
-    `--env=OCR_LLM_TOKEN=${ocrToken}`,
+    "--env=OCR_LLM_TOKEN",
     `--env=OCR_LLM_MODEL=${params.profile.OCR_LLM_MODEL}`,
-    `--env=DEEPSEEK_API_KEY=${params.credentials.DEEPSEEK_API_KEY ?? ""}`,
-    `--env=XIAOMI_TOKEN_PLAN_SGP_API_KEY=${params.credentials.XIAOMI_TOKEN_PLAN_SGP_API_KEY ?? ""}`,
-    `--env=QWEN_TOKEN_PLAN_API_KEY=${params.credentials.QWEN_TOKEN_PLAN_API_KEY ?? ""}`,
-    `--env=OPENCODE_API_KEY=${params.credentials.OPENCODE_API_KEY ?? ""}`,
-    `--env=OPENROUTER_API_KEY=${params.credentials.OPENROUTER_API_KEY ?? ""}`,
-    `--env=LLM_API_KEY=${params.credentials.LLM_API_KEY ?? ""}`,
-    `--env=GH_TOKEN=${params.credentials.GH_TOKEN ?? ""}`,
-    `--env=JINA_API_KEY=${params.credentials.JINA_API_KEY ?? ""}`,
-    `--env=BRAVE_SEARCH_API_KEY=${params.credentials.BRAVE_SEARCH_API_KEY ?? ""}`,
   ];
+
+  // 許可されたクレデンシャルだけをコンテナへ注入する。
+  // 未取得の任意キーは空の環境変数を作らず、警告は loadCredentials 側に任せる。
+  for (const { name } of allowedCredentialEntries) {
+    // 値はspawnSyncの子プロセス環境へ渡し、argvには秘密値を含めない。
+    envArgs.push(`--env=${name}`);
+  }
+  return envArgs;
 };
 
 // pi のセッション保存先をホストと同じ絶対パスに固定する。pi はこの値を
@@ -319,15 +365,19 @@ export const buildContainerArgs = (
   ];
 };
 
-export const loadCredentials = (exec: ExecFn = execFileSync as ExecFn): PartialCredentials => {
+export const loadCredentials = (
+  allowedNames: readonly CredentialName[],
+  exec: ExecFn = execFileSync as ExecFn,
+): PartialCredentials => {
   const credentials: PartialCredentials = {};
+  const allowed = new Set(allowedNames);
   for (const { name, file, args } of CREDENTIAL_SOURCES) {
+    if (!allowed.has(name)) continue;
     const value = getCredential(file, args, exec);
     if (!value) {
-      // ベストエフォート: 未取得は警告にとどめ、コンテナ起動は継続する。
-      // profile.OCR_LLM_TOKEN_KEY がこのキーを参照している場合は buildEnvArgs 側で
-      // 個別にエラーになるため、ユーザーにどのクレデンシャルが欠落しているかを
-      // 明示できる。
+      // 許可された任意キーの未取得は警告にとどめ、コンテナ起動を継続する。
+      // OCR_LLM_TOKEN_KEY / requiredApiKeyEnv がこのキーを参照している場合は
+      // buildEnvArgs 側で個別にエラーになる。
       console.error(
         `警告: クレデンシャル '${name}' の取得に失敗しました。macOS Keychain の登録状態 / 'gh auth login' の完了を確認してください。`,
       );
@@ -345,8 +395,28 @@ export const loadCredentials = (exec: ExecFn = execFileSync as ExecFn): PartialC
 export const redactSecrets = (args: string[]): string[] =>
   args.map((arg) => arg.replace(SECRET_ENV_PATTERN, "--env=$<key>=***"));
 
+// Profileで許可され、取得できた秘密値だけを子プロセス環境へ組み立てる。
+// container run は '--env=KEY' で子プロセス環境から値を継承するため、
+// 秘密値をcontainerのargvへ埋め込まずにコンテナへ渡せる。
+export const buildCredentialProcessEnv = (
+  credentials: PartialCredentials,
+  profile: ProfileConfig,
+): Record<string, string> => {
+  const env: Record<string, string> = {};
+  const allowedKeys = new Set(profile.credentialKeys);
+  for (const { name, value } of getAllowedCredentialEntries(credentials, profile.credentialKeys)) {
+    env[name] = value;
+  }
+  const ocrCredentialName = profile.OCR_LLM_TOKEN_KEY as CredentialName;
+  if (CREDENTIAL_NAMES.includes(ocrCredentialName) && allowedKeys.has(ocrCredentialName)) {
+    const ocrToken = credentials[ocrCredentialName];
+    if (ocrToken) env.OCR_LLM_TOKEN = ocrToken;
+  }
+  return env;
+};
+
 // herdr 0.8.0 以降、フルライフサイクル統合（pi 等）の状態報告は
-// Agent Presence（ペインで agent が起動中とサーバーが認識する状態）の確立が前提。
+// Agent Presence（ペインで agent が起動中とサーバーが認識した状態）の確立が前提。
 // Docker 内で動く agent はプロセス名検出が効かないため、ホスト herdr は
 // プロセスの環境変数 HERDR_AGENT=<agent> を検出経路として使う（ADR 0002）。
 // pi を起動するモード（--bash 以外）ではこのヒントを付与し、--bash では
@@ -354,8 +424,13 @@ export const redactSecrets = (args: string[]): string[] =>
 export const buildContainerProcessEnv = (
   bashMode: boolean,
   base: NodeJS.ProcessEnv = process.env,
-): NodeJS.ProcessEnv =>
-  bashMode ? base : { ...base, HERDR_AGENT: "pi" };
+  secretEnv: Record<string, string> = {},
+): NodeJS.ProcessEnv => {
+  const withSecrets = Object.keys(secretEnv).length > 0
+    ? { ...base, ...secretEnv }
+    : base;
+  return bashMode ? withSecrets : { ...withSecrets, HERDR_AGENT: "pi" };
+};
 
 export const runContainer = (
   args: string[],
@@ -465,11 +540,37 @@ export const attachToContainer = (projectName: string, env: NodeJS.ProcessEnv): 
   return runContainer(args, env);
 };
 
-export const runContainerCommand = (ctx: RunContext): number => {
-  const env = buildContainerProcessEnv(ctx.bashMode);
-  if (ctx.attachMode) {
-    return attachToContainer(ctx.hostProjectName, env);
+export const resolveRequiredApiKeyEnv = (params: {
+  bashMode: boolean;
+  cliApiKeyEnv: string | undefined;
+  hostProjectName: string;
+  profile: ProfileConfig;
+  projects: Record<string, ProjectConfig>;
+}): string | undefined => {
+  // bashモードはProfile/Projectの値を自動起動へ渡さず、CLI指定だけを
+  // PI_API_KEY_ENVとしてexportする。Profile/Projectの値は、bash内で
+  // pi-resumeを明示的に呼んだときにだけ使われる。
+  if (params.bashMode) return params.cliApiKeyEnv;
+  const project = params.projects[params.hostProjectName];
+  if (project !== undefined) {
+    return params.cliApiKeyEnv ?? project.apiKeyEnv ?? params.profile.apiKeyEnv;
   }
+  // 未知プロジェクトのデフォルト起動では、生成スクリプトが apiKeyEnv を
+  // fallback に渡さない既存挙動を維持する。
+  return undefined;
+};
+
+export const runContainerCommand = (ctx: RunContext): number => {
+  if (ctx.attachMode) {
+    return attachToContainer(ctx.hostProjectName, buildContainerProcessEnv(ctx.bashMode));
+  }
+  const requiredApiKeyEnv = resolveRequiredApiKeyEnv({
+    bashMode: ctx.bashMode,
+    cliApiKeyEnv: ctx.apiKeyEnv,
+    hostProjectName: ctx.hostProjectName,
+    profile: ctx.profile,
+    projects: ctx.projects,
+  });
   const envArgs = [
     ...buildEnvArgs({
       credentials: ctx.credentials,
@@ -477,9 +578,15 @@ export const runContainerCommand = (ctx: RunContext): number => {
       hostIp: ctx.hostIp,
       profile: ctx.profile,
       profileName: ctx.profileName,
+      requiredApiKeyEnv,
     }),
     ...buildPiSessionEnvArgs(ctx.home),
   ];
+  const env = buildContainerProcessEnv(
+    ctx.bashMode,
+    process.env,
+    buildCredentialProcessEnv(ctx.credentials, ctx.profile),
+  );
   const volumeArgs = buildVolumeArgs(ctx.home, ctx.hostProjectName);
   const initScript = buildInitScript({
     bashMode: ctx.bashMode,
@@ -508,7 +615,6 @@ export const prepareEnvironment = (params: {
   provider: string | undefined;
   session: string | undefined;
 }): RunContext => {
-  const credentials = loadCredentials();
   const home = requireEnv("HOME");
   const herdrPaneId = requireEnv("HERDR_PANE_ID");
   // ホスト側のカレントディレクトリ名 = プロジェクト名。
@@ -523,6 +629,23 @@ export const prepareEnvironment = (params: {
   }
   const aiEnvConfig: AiEnvConfig = loadAiEnvConfig();
   const profileName = detectProfileName(process.cwd(), aiEnvConfig.profiles);
+  const profile = aiEnvConfig.profiles[profileName]!;
+  const cliApiKeyEnvForValidation =
+    params.apiKeyEnv !== undefined &&
+    (aiEnvConfig.projects[hostProjectName] !== undefined || params.bashMode)
+      ? params.apiKeyEnv
+      : undefined;
+  validateProfileCredentialAccess({
+    configPath: "<runtime>",
+    hostProjectName,
+    profileName,
+    profile,
+    projects: aiEnvConfig.projects,
+    // 未知Projectの通常起動では、生成スクリプトがCLIのapiKeyEnvを使わない。
+    cliApiKeyEnv: cliApiKeyEnvForValidation,
+  });
+  // Profile を確定してから許可されたクレデンシャルだけを Keychain から取得する。
+  const credentials = loadCredentials(profile.credentialKeys);
   return {
     apiKeyEnv: params.apiKeyEnv,
     attachMode: params.attachMode,
@@ -536,8 +659,7 @@ export const prepareEnvironment = (params: {
     home,
     hostIp: getHostIp(),
     hostProjectName,
-    // detectProfileName が profiles 内の存在を保証しているため non-null assertion を使用
-    profile: aiEnvConfig.profiles[profileName]!,
+    profile,
     profileName,
     projects: aiEnvConfig.projects,
   };

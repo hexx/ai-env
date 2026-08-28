@@ -3,10 +3,14 @@
 // 設定値の検証に使う正規表現マッチや CLI オプションの検証を担当する。
 
 import {
+  CREDENTIAL_NAMES,
   SAFE_ENV_NAME_PATTERN,
   SAFE_ENV_PATTERN,
   SAFE_MODEL_PATTERN,
   SAFE_SHELL_PATTERN,
+  type CredentialName,
+  type ProfileConfig,
+  type ProjectConfig,
 } from "./pi-types";
 
 // ===== ヘルパー =====
@@ -52,6 +56,128 @@ export const requireSafeId = (params: {
     );
   }
   return rawValue;
+};
+
+// CREDENTIAL_NAMES に登録されたクレデンシャル名であることを検証。
+// credentialKeys / OCR_LLM_TOKEN_KEY の設定値に使う。
+export const requireCredentialName = (params: {
+  configPath: string;
+  fieldName: string;
+  key: string;
+  rawValue: unknown;
+}): CredentialName => {
+  const { configPath, fieldName, key, rawValue } = params;
+  const value = requireSafeId({
+    configPath,
+    fieldName,
+    key,
+    pattern: SAFE_ENV_NAME_PATTERN,
+    rawValue,
+  });
+  if (!(CREDENTIAL_NAMES as readonly string[]).includes(value)) {
+    throw new Error(
+      `設定ファイル ${configPath} の値が無効です: ${key}.${fieldName} = ${JSON.stringify(value)} (登録済みクレデンシャル: ${CREDENTIAL_NAMES.join(", ")})`,
+    );
+  }
+  return value as CredentialName;
+};
+
+// Profile の credentialKeys 配列を検証する。
+// 未登録名・重複・空配列を拒否し、参照名を CredentialName に絞り込む。
+export const parseCredentialKeys = (
+  configPath: string,
+  key: string,
+  rawValue: unknown,
+): CredentialName[] => {
+  if (!Array.isArray(rawValue) || rawValue.length === 0) {
+    throw new Error(
+      `設定ファイル ${configPath} の ${key} に有効な credentialKeys がありません。既存Profileを移行するには、pi-projects.example.jsonを参考に必要なクレデンシャル名だけを配列で追加してください`,
+    );
+  }
+  const result: CredentialName[] = [];
+  const seen = new Set<CredentialName>();
+  for (const [index, value] of rawValue.entries()) {
+    const credentialName = requireCredentialName({
+      configPath,
+      fieldName: `credentialKeys[${index}]`,
+      key,
+      rawValue: value,
+    });
+    if (seen.has(credentialName)) {
+      throw new Error(
+        `設定ファイル ${configPath} の値が無効です: ${key}.credentialKeys に同じクレデンシャル '${credentialName}' が重複しています`,
+      );
+    }
+    seen.add(credentialName);
+    result.push(credentialName);
+  }
+  return result;
+};
+
+// Profile / Project / CLI が選択した apiKeyEnv が Profile の
+// credentialKeys に含まれることを検証する。CLI でも許可リストを迂回させない。
+export const requireAllowedCredentialName = (params: {
+  configPath: string;
+  fieldName: string;
+  key: string;
+  rawValue: unknown;
+  allowedKeys: readonly CredentialName[];
+}): CredentialName => {
+  const credentialName = requireCredentialName(params);
+  if (!params.allowedKeys.includes(credentialName)) {
+    throw new Error(
+      `設定ファイル ${params.configPath} の値が無効です: ${params.key}.${params.fieldName} = ${JSON.stringify(credentialName)} は Profile の credentialKeys に含まれていません`,
+    );
+  }
+  return credentialName;
+};
+
+// Profile の全設定、Project の apiKeyEnv、CLI の apiKeyEnv が
+// Profile の許可リストと整合することを検証する。
+export const validateProfileCredentialAccess = (params: {
+  configPath: string;
+  hostProjectName: string;
+  profileName: string;
+  profile: ProfileConfig;
+  projects: Record<string, ProjectConfig>;
+  cliApiKeyEnv?: string;
+}): void => {
+  const { configPath, hostProjectName, profileName, profile, projects, cliApiKeyEnv } = params;
+  requireAllowedCredentialName({
+    configPath,
+    fieldName: "OCR_LLM_TOKEN_KEY",
+    key: `profiles.${profileName}`,
+    rawValue: profile.OCR_LLM_TOKEN_KEY,
+    allowedKeys: profile.credentialKeys,
+  });
+  if (profile.apiKeyEnv !== undefined) {
+    requireAllowedCredentialName({
+      configPath,
+      fieldName: "apiKeyEnv",
+      key: `profiles.${profileName}`,
+      rawValue: profile.apiKeyEnv,
+      allowedKeys: profile.credentialKeys,
+    });
+  }
+  const project = projects[hostProjectName];
+  if (project?.apiKeyEnv !== undefined) {
+    requireAllowedCredentialName({
+      configPath,
+      fieldName: "apiKeyEnv",
+      key: `projects.${hostProjectName}`,
+      rawValue: project.apiKeyEnv,
+      allowedKeys: profile.credentialKeys,
+    });
+  }
+  if (cliApiKeyEnv !== undefined) {
+    requireAllowedCredentialName({
+      configPath: "<cli>",
+      fieldName: "apiKeyEnv",
+      key: "--api-key-env",
+      rawValue: cliApiKeyEnv,
+      allowedKeys: profile.credentialKeys,
+    });
+  }
 };
 
 // プロジェクトキー名(英数字・ハイフン・アンダースコア・ピリオドのみ)を検証。

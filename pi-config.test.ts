@@ -44,11 +44,12 @@ describe("ProfileConfig.apiKeyEnv", () => {
       {
         profiles: {
           "pi-work": {
+            credentialKeys: ["OPENAI_API_KEY", "OPENCODE_API_KEY"],
             OCR_USE_ANTHROPIC: "true",
             OCR_LLM_URL: "https://api.anthropic.com/v1/messages",
-            OCR_LLM_TOKEN_KEY: "WORK_API_KEY",
+            OCR_LLM_TOKEN_KEY: "OPENCODE_API_KEY",
             OCR_LLM_MODEL: "claude-3-5-sonnet-20241022",
-            apiKeyEnv: "WORK_API_KEY",
+            apiKeyEnv: "OPENAI_API_KEY",
           },
         },
         projects: {
@@ -59,7 +60,7 @@ describe("ProfileConfig.apiKeyEnv", () => {
       },
       (_configPath) => {
         const config = loadAiEnvConfig();
-        assert.equal(config.profiles["pi-work"]?.apiKeyEnv, "WORK_API_KEY");
+        assert.equal(config.profiles["pi-work"]?.apiKeyEnv, "OPENAI_API_KEY");
       },
     );
   });
@@ -69,9 +70,10 @@ describe("ProfileConfig.apiKeyEnv", () => {
       {
         profiles: {
           "pi-work": {
+            credentialKeys: ["OPENAI_API_KEY", "OPENCODE_API_KEY"],
             OCR_USE_ANTHROPIC: "true",
             OCR_LLM_URL: "https://api.anthropic.com/v1/messages",
-            OCR_LLM_TOKEN_KEY: "WORK_API_KEY",
+            OCR_LLM_TOKEN_KEY: "OPENCODE_API_KEY",
             OCR_LLM_MODEL: "claude-3-5-sonnet-20241022",
             apiKeyEnv: "WORK.API.KEY",
           },
@@ -96,9 +98,10 @@ describe("ProfileConfig.apiKeyEnv", () => {
       {
         profiles: {
           "pi-work": {
+            credentialKeys: ["OPENAI_API_KEY", "OPENCODE_API_KEY"],
             OCR_USE_ANTHROPIC: "true",
             OCR_LLM_URL: "https://api.anthropic.com/v1/messages",
-            OCR_LLM_TOKEN_KEY: "WORK_API_KEY",
+            OCR_LLM_TOKEN_KEY: "OPENCODE_API_KEY",
             OCR_LLM_MODEL: "claude-3-5-sonnet-20241022",
             apiKeyEnv: "",
           },
@@ -119,6 +122,104 @@ describe("ProfileConfig.apiKeyEnv", () => {
   });
 });
 
+// ===== credentialKeys =====
+
+describe("ProfileConfig.credentialKeys", () => {
+  const baseProfile = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
+    credentialKeys: ["OPENAI_API_KEY", "OPENCODE_API_KEY"],
+    OCR_USE_ANTHROPIC: "false",
+    OCR_LLM_URL: "https://opencode.ai/zen/go/v1",
+    OCR_LLM_TOKEN_KEY: "OPENCODE_API_KEY",
+    OCR_LLM_MODEL: "mimo-v2.5-pro",
+    ...overrides,
+  });
+
+  it("credentialKeys と apiKeyEnv を読み込める", async () => {
+    await withTempConfig(
+      {
+        profiles: { "pi-private": baseProfile({ apiKeyEnv: "OPENAI_API_KEY" }) },
+        projects: { "ai-env": {} },
+      },
+      () => {
+        const config = loadAiEnvConfig();
+        assert.deepEqual(config.profiles["pi-private"]?.credentialKeys, [
+          "OPENAI_API_KEY",
+          "OPENCODE_API_KEY",
+        ]);
+        assert.equal(config.profiles["pi-private"]?.apiKeyEnv, "OPENAI_API_KEY");
+      },
+    );
+  });
+
+  it("credentialKeys がないProfileを拒否する", async () => {
+    await withTempConfig(
+      {
+        profiles: {
+          "pi-private": baseProfile({ credentialKeys: undefined }),
+        },
+        projects: { "ai-env": {} },
+      },
+      () => assert.throws(() => loadAiEnvConfig(), /credentialKeys/),
+    );
+  });
+
+  it("未登録のクレデンシャルをcredentialKeysへ指定すると拒否する", async () => {
+    await withTempConfig(
+      {
+        profiles: {
+          "pi-private": baseProfile({ credentialKeys: ["ZAI_API_KEY"] }),
+        },
+        projects: { "ai-env": {} },
+      },
+      () => assert.throws(() => loadAiEnvConfig(), /登録済みクレデンシャル|ZAI_API_KEY/),
+    );
+  });
+
+  it("OCR_LLM_TOKEN_KEY がcredentialKeysにないProfileを拒否する", async () => {
+    await withTempConfig(
+      {
+        profiles: {
+          "pi-private": baseProfile({
+            credentialKeys: ["OPENAI_API_KEY"],
+            OCR_LLM_TOKEN_KEY: "OPENCODE_API_KEY",
+          }),
+        },
+        projects: { "ai-env": {} },
+      },
+      () => assert.throws(() => loadAiEnvConfig(), /OCR_LLM_TOKEN_KEY|credentialKeys/),
+    );
+  });
+
+  it("ProfileのapiKeyEnvがcredentialKeysにない場合を拒否する", async () => {
+    await withTempConfig(
+      {
+        profiles: {
+          "pi-private": baseProfile({
+            credentialKeys: ["OPENCODE_API_KEY"],
+            apiKeyEnv: "OPENAI_API_KEY",
+          }),
+        },
+        projects: { "ai-env": {} },
+      },
+      () => assert.throws(() => loadAiEnvConfig(), /apiKeyEnv|credentialKeys/),
+    );
+  });
+
+  it("credentialKeys の重複を拒否する", async () => {
+    await withTempConfig(
+      {
+        profiles: {
+          "pi-private": baseProfile({
+            credentialKeys: ["OPENAI_API_KEY", "OPENAI_API_KEY"],
+          }),
+        },
+        projects: { "ai-env": {} },
+      },
+      () => assert.throws(() => loadAiEnvConfig(), /重複/),
+    );
+  });
+});
+
 // ===== フォールバック挙動 =====
 
 
@@ -134,9 +235,10 @@ describe("ProjectConfig - session 廃止", () => {
       {
         profiles: {
           "pi-work": {
+            credentialKeys: ["LLM_API_KEY", "OPENCODE_API_KEY"],
             OCR_USE_ANTHROPIC: "true",
             OCR_LLM_URL: "https://api.anthropic.com/v1/messages",
-            OCR_LLM_TOKEN_KEY: "WORK_API_KEY",
+            OCR_LLM_TOKEN_KEY: "OPENCODE_API_KEY",
             OCR_LLM_MODEL: "claude-3-5-sonnet-20241022",
           },
         },
@@ -167,9 +269,10 @@ describe("ProjectConfig - session 廃止", () => {
       {
         profiles: {
           "pi-work": {
+            credentialKeys: ["OPENCODE_API_KEY"],
             OCR_USE_ANTHROPIC: "true",
             OCR_LLM_URL: "https://api.anthropic.com/v1/messages",
-            OCR_LLM_TOKEN_KEY: "WORK_API_KEY",
+            OCR_LLM_TOKEN_KEY: "OPENCODE_API_KEY",
             OCR_LLM_MODEL: "claude-3-5-sonnet-20241022",
           },
         },
@@ -193,9 +296,10 @@ describe("ProjectConfig - session 廃止", () => {
       {
         profiles: {
           "pi-work": {
+            credentialKeys: ["OPENCODE_API_KEY"],
             OCR_USE_ANTHROPIC: "true",
             OCR_LLM_URL: "https://api.anthropic.com/v1/messages",
-            OCR_LLM_TOKEN_KEY: "WORK_API_KEY",
+            OCR_LLM_TOKEN_KEY: "OPENCODE_API_KEY",
             OCR_LLM_MODEL: "claude-3-5-sonnet-20241022",
           },
         },
