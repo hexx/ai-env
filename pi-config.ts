@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { readFileSync } from "node:fs";
 import stripJsonComments from "strip-json-comments";
 import {
+  CREDENTIAL_NAMES,
   type AiEnvConfig,
   type ProfileConfig,
   type ProjectConfig,
@@ -19,6 +20,9 @@ import {
 } from "./pi-types";
 import {
   errorMessage,
+  parseCredentialKeys,
+  requireAllowedCredentialName,
+  requireCredentialName,
   requireSafeId,
   toPlainObject,
   validateProjectKey,
@@ -78,18 +82,20 @@ export const toAiEnvConfigObject = (
 
 // ===== プロファイルパース =====
 
-// プロファイルの必須 OCR フィールド 4 つを SAFE_ENV_PATTERN で検証。
+// プロファイルの必須 OCR フィールド 4 つを検証。
+// OCR_LLM_TOKEN_KEY は登録済みクレデンシャル名に限定する。
 export const parseProfileOcrFields = (
   configPath: string,
   name: string,
   profileObj: Record<string, unknown>,
 ): ProfileConfig => {
   const key = `profiles.${name}`;
+  const credentialKeys = parseCredentialKeys(configPath, key, profileObj.credentialKeys);
   const OCR_LLM_MODEL = requireSafeId({ configPath, fieldName: "OCR_LLM_MODEL", key, pattern: SAFE_ENV_PATTERN, rawValue: profileObj.OCR_LLM_MODEL });
-  const OCR_LLM_TOKEN_KEY = requireSafeId({ configPath, fieldName: "OCR_LLM_TOKEN_KEY", key, pattern: SAFE_ENV_PATTERN, rawValue: profileObj.OCR_LLM_TOKEN_KEY });
+  const OCR_LLM_TOKEN_KEY = requireCredentialName({ configPath, fieldName: "OCR_LLM_TOKEN_KEY", key, rawValue: profileObj.OCR_LLM_TOKEN_KEY });
   const OCR_LLM_URL = requireSafeId({ configPath, fieldName: "OCR_LLM_URL", key, pattern: SAFE_ENV_PATTERN, rawValue: profileObj.OCR_LLM_URL });
   const OCR_USE_ANTHROPIC = requireSafeId({ configPath, fieldName: "OCR_USE_ANTHROPIC", key, pattern: SAFE_ENV_PATTERN, rawValue: profileObj.OCR_USE_ANTHROPIC });
-  return { OCR_LLM_MODEL, OCR_LLM_TOKEN_KEY, OCR_LLM_URL, OCR_USE_ANTHROPIC };
+  return { credentialKeys, OCR_LLM_MODEL, OCR_LLM_TOKEN_KEY, OCR_LLM_URL, OCR_USE_ANTHROPIC };
 };
 
 // プロファイルのオプション(provider/model/apiKeyEnv)をそれぞれ適切な pattern で検証。
@@ -124,8 +130,26 @@ export const parseProfileEntry = (
   raw: unknown,
 ): ProfileConfig => {
   const profileObj = toPlainObject(configPath, `profiles.${name}`, raw);
+  const key = `profiles.${name}`;
   const result = parseProfileOcrFields(configPath, name, profileObj);
+  const credentialKeys = result.credentialKeys;
   parseProfileOptionalFields({ configPath, name, profileObj, result });
+  requireAllowedCredentialName({
+    configPath,
+    fieldName: "OCR_LLM_TOKEN_KEY",
+    key,
+    rawValue: result.OCR_LLM_TOKEN_KEY,
+    allowedKeys: credentialKeys,
+  });
+  if (result.apiKeyEnv !== undefined) {
+    requireAllowedCredentialName({
+      configPath,
+      fieldName: "apiKeyEnv",
+      key,
+      rawValue: result.apiKeyEnv,
+      allowedKeys: credentialKeys,
+    });
+  }
   return result;
 };
 
@@ -214,6 +238,7 @@ export const getDefaultConfig = (): AiEnvConfig => {
   return {
     profiles: {
       "pi-private": {
+        credentialKeys: [...CREDENTIAL_NAMES],
         OCR_LLM_MODEL: "mimo-v2.5-pro",
         OCR_LLM_TOKEN_KEY: "OPENCODE_API_KEY",
         OCR_LLM_URL: "https://opencode.ai/zen/go/v1",

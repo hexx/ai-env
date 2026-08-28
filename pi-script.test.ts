@@ -293,9 +293,10 @@ describe("buildInitScript - apiKeyEnv フォールバック", () => {
       {
         profiles: {
           "pi-work": {
+            credentialKeys: ["OPENCODE_API_KEY"],
             OCR_USE_ANTHROPIC: "true",
             OCR_LLM_URL: "https://api.anthropic.com/v1/messages",
-            OCR_LLM_TOKEN_KEY: "WORK_API_KEY",
+            OCR_LLM_TOKEN_KEY: "OPENCODE_API_KEY",
             OCR_LLM_MODEL: "claude-3-5-sonnet-20241022",
           },
         },
@@ -317,9 +318,10 @@ describe("buildInitScript - apiKeyEnv フォールバック", () => {
       {
         profiles: {
           "pi-work": {
+            credentialKeys: ["OPENCODE_API_KEY"],
             OCR_USE_ANTHROPIC: "true",
             OCR_LLM_URL: "https://api.anthropic.com/v1/messages",
-            OCR_LLM_TOKEN_KEY: "WORK_API_KEY",
+            OCR_LLM_TOKEN_KEY: "OPENCODE_API_KEY",
             OCR_LLM_MODEL: "claude-3-5-sonnet-20241022",
             model: "deepseek-v4-flash:xhigh",
           },
@@ -340,9 +342,10 @@ describe("buildInitScript - apiKeyEnv フォールバック", () => {
       {
         profiles: {
           "pi-work": {
+            credentialKeys: ["OPENCODE_API_KEY"],
             OCR_USE_ANTHROPIC: "true",
             OCR_LLM_URL: "https://api.anthropic.com/v1/messages",
-            OCR_LLM_TOKEN_KEY: "WORK_API_KEY",
+            OCR_LLM_TOKEN_KEY: "OPENCODE_API_KEY",
             OCR_LLM_MODEL: "claude-3-5-sonnet-20241022",
           },
         },

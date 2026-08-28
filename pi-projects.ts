@@ -12,4 +12,7 @@
 export { type AiEnvConfig, type ProfileConfig, type ProjectConfig } from "./pi-types";
 export { buildInitScript } from "./pi-script";
 export { loadAiEnvConfig } from "./pi-config";
-export { validateCliOverrides } from "./pi-validation";
+export {
+  validateCliOverrides,
+  validateProfileCredentialAccess,
+} from "./pi-validation";

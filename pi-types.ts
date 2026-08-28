@@ -13,12 +13,32 @@ export interface ProjectConfig {
   apiKeyEnv?: string;
 }
 
-// プロファイル 1 個ぶんの OCR 全体設定。
-// OCR_LLM_TOKEN_KEY には CREDENTIAL_SOURCES のキー名(例: "OPENCODE_API_KEY")を
+// ai-env が認識するクレデンシャル名。
+// 配列は Keychain のサービス名、コンテナ内の環境変数名、credentialKeys の値で
+// 共通して使う正規の名前一覧。新しいクレデンシャルを追加する場合は、まずここへ追加する。
+export const CREDENTIAL_NAMES = [
+  "BRAVE_SEARCH_API_KEY",
+  "DEEPSEEK_API_KEY",
+  "GH_TOKEN",
+  "JINA_API_KEY",
+  "LLM_API_KEY",
+  "OPENAI_API_KEY",
+  "OPENCODE_API_KEY",
+  "OPENROUTER_API_KEY",
+  "QWEN_TOKEN_PLAN_API_KEY",
+  "XIAOMI_TOKEN_PLAN_SGP_API_KEY",
+] as const;
+
+export type CredentialName = (typeof CREDENTIAL_NAMES)[number];
+
+// プロファイル 1 個ぶんの OCR 全体設定とクレデンシャル許可リスト。
+// OCR_LLM_TOKEN_KEY には CREDENTIAL_NAMES のキー名(例: "OPENCODE_API_KEY")を
 // 指定し、credentials[OCR_LLM_TOKEN_KEY] を --env=OCR_LLM_TOKEN= に注入する。
+// credentialKeys は、この Profile のサンドボックスへ取得・注入してよいキーの一覧。
 // provider / model / apiKeyEnv はプロジェクト側の未指定時のフォールバック値として
 // 利用される(ProjectConfig の同名フィールドが優先される)。
 export interface ProfileConfig {
+  credentialKeys: CredentialName[];
   OCR_USE_ANTHROPIC: string;
   OCR_LLM_URL: string;
   OCR_LLM_TOKEN_KEY: string;

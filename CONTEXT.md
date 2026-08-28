@@ -78,6 +78,16 @@ _Avoid_: インデクサー, 履歴管理者
 既存セッションに接続して pi を起動・切り替える操作。経路は `pi -c`（最新セッションの続行）、`/resume`（プロジェクト内ピッカー）、`--session`（明示セッション）。
 _Avoid_: 引き継ぐ（README の旧表現）, 継続
 
+## Credentials
+
+**Credential Key（クレデンシャルキー）**:
+ai-env が認証情報を識別するために使う名前（例: `OPENAI_API_KEY`）。認証情報の値そのものではなく、参照名を指す。
+_Avoid_: APIキー（値と名前を混同する場合）, シークレット
+
+**Credential Allowlist（クレデンシャル許可リスト）**:
+Profile が利用を許可する Credential Key の集合。許可されていないキーは、その Profile の利用対象にならない。
+_Avoid_: ホワイトリスト, `credentialKeys`（設定フィールド名だけを指す場合）
+
 ## Tool Ownership
 
 **User-Owned Tool（ユーザー領域ツール）**:

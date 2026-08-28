@@ -95,7 +95,7 @@ Index Data の鮮度や Pi 履歴ソースの状態を確認する場合は、�
 
 ## クレデンシャル
 
-以下のクレデンシャルを実行時に動的に取得する:
+`CREDENTIAL_SOURCES`に登録され、Profileの`credentialKeys`で許可されたクレデンシャルだけを実行時に動的に取得する:
 
 | 用途 | 取得元 |
 | --- | --- |
@@ -106,6 +106,7 @@ Index Data の鮮度や Pi 履歴ソースの状態を確認する場合は、�
 | `OPENCODE_API_KEY` | macOS Keychain |
 | `OPENROUTER_API_KEY` | macOS Keychain |
 | `LLM_API_KEY` | macOS Keychain |
+| `OPENAI_API_KEY` | macOS Keychain |
 | `JINA_API_KEY` | macOS Keychain |
 | `GH_TOKEN` | `gh auth token` |
 
@@ -114,6 +115,9 @@ Index Data の鮮度や Pi 履歴ソースの状態を確認する場合は、�
 設定は `~/.config/ai-env/pi-projects.json` に JSON ファイルとして配置する。
 リポジトリの [`pi-projects.example.json`](./pi-projects.example.json) を参考に作成すること。
 設定ファイルは JSONC (JSON with Comments) 形式をサポートしており、`//` 行コメントや `/* */` ブロックコメントを使用できる。
+
+既存の設定ファイルには、各Profileへ必須の `credentialKeys` を追加してください。未指定のProfileは、
+全クレデンシャルへフォールバックせず起動エラーになります。
 
 ### コンテナ内のディレクトリ構成
 
@@ -132,6 +136,18 @@ Index Data の鮮度や Pi 履歴ソースの状態を確認する場合は、�
 {
   "profiles": {
     "pi-private": {
+      "credentialKeys": [
+        "BRAVE_SEARCH_API_KEY",
+        "DEEPSEEK_API_KEY",
+        "GH_TOKEN",
+        "JINA_API_KEY",
+        "LLM_API_KEY",
+        "OPENAI_API_KEY",
+        "OPENCODE_API_KEY",
+        "OPENROUTER_API_KEY",
+        "QWEN_TOKEN_PLAN_API_KEY",
+        "XIAOMI_TOKEN_PLAN_SGP_API_KEY"
+      ],
       "OCR_USE_ANTHROPIC": "false",
       "OCR_LLM_URL": "https://opencode.ai/zen/go/v1",
       "OCR_LLM_TOKEN_KEY": "OPENCODE_API_KEY",
@@ -141,16 +157,18 @@ Index Data の鮮度や Pi 履歴ソースの状態を確認する場合は、�
   "projects": {
     "ai-env": {
       "provider": "opencode-go",
-      "model": "minimax-m3"
+      "model": "minimax-m3",
+      "apiKeyEnv": "LLM_API_KEY"
     },
     "mindmap": {}
   }
 }
 ```
 
-* `profiles`: 仕事用 / プライベート用など用途別のプロファイル。各プロファイルに OCR 全体設定を記述。オプションで `provider` と `model` を指定でき、プロジェクト側で未指定の場合のデフォルト値として使用される。
-* `projects`: プロジェクトごとの pi 起動設定。`provider` / `model` / `apiKeyEnv` を任意で指定し、未指定時はプロファイルのデフォルト値にフォールバックする。`apiKeyEnv` はコンテナ内の API キー用環境変数名(例: `LLM_API_KEY`)で、生成シェルでは `$LLM_API_KEY` としてランタイム展開される。旧形式の `session` フィールド(セッション ID)は廃止されたが、後方互換のため読み飛ばされる(セッション再開は `pi -c` が担う)。
-* `OCR_LLM_TOKEN_KEY`: CREDENTIAL_SOURCES のキー名を指定。`credentials[OCR_LLM_TOKEN_KEY]` の値が `--env=OCR_LLM_TOKEN=...` に注入される。
+* `profiles`: 仕事用 / プライベート用など用途別のプロファイル。`credentialKeys` は必須で、このProfileへ取得・注入してよいクレデンシャル名を列挙する。`OCR_LLM_TOKEN_KEY` と `apiKeyEnv` は必ずこの一覧に含める。
+* `provider` / `model` / `apiKeyEnv`: Profileの任意のデフォルト値。プロジェクト側で未指定の場合に使われる。今回、OpenAIやGPT-5.6 Lunaをデフォルトには設定していない。
+* `projects`: プロジェクトごとの pi 起動設定。`provider` / `model` / `apiKeyEnv` を任意で指定し、未指定時はプロファイルのデフォルト値にフォールバックする。`apiKeyEnv` はコンテナ内の API キー用環境変数名で、Profileの `credentialKeys` に含まれていなければならない。旧形式の `session` フィールド(セッション ID)は廃止されたが、後方互換のため読み飛ばされる(セッション再開は `pi -c` が担う)。
+* `OCR_LLM_TOKEN_KEY`: `CREDENTIAL_SOURCES` に登録されたキー名を指定。`credentials[OCR_LLM_TOKEN_KEY]` の値が `--env=OCR_LLM_TOKEN=...` に注入される。
 
 ### CLI オプション
 
@@ -172,6 +190,23 @@ Index Data の鮮度や Pi 履歴ソースの状態を確認する場合は、�
 * `ai-env --session <id>` は `--session <id>` フラグとして pi に渡し、特定セッションを 1 回だけ再開する。
 * プロジェクト未マッチ時 (`projects` に存在しないプロジェクト) は CLI > プロファイル の順でフォールバック。CLI 未指定ならプロファイルデフォルト、それも未指定ならフラグを出さない。
 * `ai-env --bash --provider X --model Y --session <id>` でコンテナに入り、`pi --provider "$PI_PROVIDER" --model "$PI_MODEL" --session "$PI_SESSION"` のように env 変数を参照して pi を起動できる。
+* `--api-key-env` はProfileの `credentialKeys` を迂回できない。許可されていないキーを指定すると起動エラーになる。
+
+#### GPT-5.6 Lunaを使う場合
+
+OpenAIのキーを `pi-private` の `credentialKeys` に含めた上で、ProfileまたはProjectへ次を指定する。
+デフォルト設定は変更されないため、必要な利用者だけが追加する。
+
+```json
+{
+  "provider": "openai",
+  "model": "gpt-5.6-luna",
+  "apiKeyEnv": "OPENAI_API_KEY"
+}
+```
+
+`OPENAI_API_KEY` は macOS Keychainから同名のサービスとして取得する。Pi組み込みのOpenAIモデルカタログを利用するため、
+ai-env側で `models.json` を作成する必要はない。
 
 ### プロファイルの自動判別
 

@@ -3,7 +3,11 @@
 
 import { describe, it } from "node:test";
 import { strict as assert } from "node:assert";
-import { validateCliOverrides } from "./pi-projects";
+import {
+  validateCliOverrides,
+  validateProfileCredentialAccess,
+} from "./pi-projects";
+import { type ProfileConfig } from "./pi-types";
 
 // ===== テスト =====
 
@@ -89,6 +93,93 @@ describe("validateCliOverrides", () => {
     assert.throws(
       () => validateCliOverrides({ session: "" }),
       /session/,
+    );
+  });
+});
+
+// ===== credentialKeys と CLI / Project の整合性 =====
+
+describe("validateProfileCredentialAccess", () => {
+  const profile: ProfileConfig = {
+    credentialKeys: ["OPENAI_API_KEY", "OPENCODE_API_KEY"],
+    OCR_USE_ANTHROPIC: "false",
+    OCR_LLM_URL: "https://opencode.ai/zen/go/v1",
+    OCR_LLM_TOKEN_KEY: "OPENCODE_API_KEY",
+    OCR_LLM_MODEL: "mimo-v2.5-pro",
+  };
+
+  it("許可リスト内のProfile / Project / CLI設定を許可する", () => {
+    assert.doesNotThrow(() =>
+      validateProfileCredentialAccess({
+        configPath: "test.json",
+        hostProjectName: "ai-env",
+        profileName: "pi-private",
+        profile: { ...profile, apiKeyEnv: "OPENAI_API_KEY" },
+        projects: {
+          "ai-env": { apiKeyEnv: "OPENCODE_API_KEY" },
+        },
+        cliApiKeyEnv: "OPENAI_API_KEY",
+      }),
+    );
+  });
+
+  it("OCR_LLM_TOKEN_KEYがProfileの許可リスト外なら拒否する", () => {
+    assert.throws(
+      () =>
+        validateProfileCredentialAccess({
+          configPath: "test.json",
+          hostProjectName: "ai-env",
+          profileName: "pi-private",
+          profile: { ...profile, OCR_LLM_TOKEN_KEY: "OPENROUTER_API_KEY" },
+          projects: {},
+        }),
+      /credentialKeys|OPENROUTER_API_KEY/,
+    );
+  });
+
+  it("CLIのapiKeyEnvでProfileの許可リストを迂回できない", () => {
+    assert.throws(
+      () =>
+        validateProfileCredentialAccess({
+          configPath: "test.json",
+          hostProjectName: "ai-env",
+          profileName: "pi-private",
+          profile,
+          projects: {},
+          cliApiKeyEnv: "OPENROUTER_API_KEY",
+        }),
+      /credentialKeys|OPENROUTER_API_KEY/,
+    );
+  });
+
+  it("ProjectのapiKeyEnvが許可リスト外なら拒否する", () => {
+    assert.throws(
+      () =>
+        validateProfileCredentialAccess({
+          configPath: "test.json",
+          hostProjectName: "ai-env",
+          profileName: "pi-private",
+          profile,
+          projects: {
+            "ai-env": { apiKeyEnv: "OPENROUTER_API_KEY" },
+          },
+        }),
+      /credentialKeys|OPENROUTER_API_KEY/,
+    );
+  });
+
+  it("現在のProject以外のapiKeyEnv設定は検証対象にしない", () => {
+    assert.doesNotThrow(() =>
+      validateProfileCredentialAccess({
+        configPath: "test.json",
+        hostProjectName: "ai-env",
+        profileName: "pi-private",
+        profile,
+        projects: {
+          "ai-env": {},
+          other: { apiKeyEnv: "OPENROUTER_API_KEY" },
+        },
+      }),
     );
   });
 });
