@@ -108,7 +108,10 @@ Index Data の鮮度や Pi 履歴ソースの状態を確認する場合は、�
 | `LLM_API_KEY` | macOS Keychain |
 | `OPENAI_API_KEY` | macOS Keychain |
 | `JINA_API_KEY` | macOS Keychain |
+| `ZAI_PLATFORM_API_KEY` | macOS Keychain |
 | `GH_TOKEN` | `gh auth token` |
+
+`ZAI_PLATFORM_API_KEY` は Z.AI **Platform API**(従量課金)用のキーで、pi 組み込みの `zai`(Z.AI **Coding Plan**・定額)が使う `ZAI_API_KEY` とは**別物**である。ai-env は後者を登録しない(課金経路を混線させないため。[docs/adr/0011](./docs/adr/0011-credential-allowlist-only-route.md)も参照)。
 
 ## pi セッション再開設定
 
@@ -146,7 +149,8 @@ Index Data の鮮度や Pi 履歴ソースの状態を確認する場合は、�
         "OPENCODE_API_KEY",
         "OPENROUTER_API_KEY",
         "QWEN_TOKEN_PLAN_API_KEY",
-        "XIAOMI_TOKEN_PLAN_SGP_API_KEY"
+        "XIAOMI_TOKEN_PLAN_SGP_API_KEY",
+        "ZAI_PLATFORM_API_KEY"
       ],
       "OCR_USE_ANTHROPIC": "false",
       "OCR_LLM_URL": "https://opencode.ai/zen/go/v1",
@@ -166,7 +170,7 @@ Index Data の鮮度や Pi 履歴ソースの状態を確認する場合は、�
 ```
 
 * `profiles`: 仕事用 / プライベート用など用途別のプロファイル。`credentialKeys` は必須で、このProfileへ取得・注入してよいクレデンシャル名を列挙する。`OCR_LLM_TOKEN_KEY` と `apiKeyEnv` は必ずこの一覧に含める。
-* `provider` / `model` / `apiKeyEnv`: Profileの任意のデフォルト値。プロジェクト側で未指定の場合に使われる。今回、OpenAIやGPT-5.6 Lunaをデフォルトには設定していない。
+* `provider` / `model` / `apiKeyEnv`: Profileの任意のデフォルト値。プロジェクト側で未指定の場合に使われる。今回、OpenAI / GPT-5.6 Luna / Z.AI Platform API をデフォルトには設定していない。
 * `projects`: プロジェクトごとの pi 起動設定。`provider` / `model` / `apiKeyEnv` を任意で指定し、未指定時はプロファイルのデフォルト値にフォールバックする。`apiKeyEnv` はコンテナ内の API キー用環境変数名で、Profileの `credentialKeys` に含まれていなければならない。旧形式の `session` フィールド(セッション ID)は廃止されたが、後方互換のため読み飛ばされる(セッション再開は `pi -c` が担う)。
 * `OCR_LLM_TOKEN_KEY`: `CREDENTIAL_SOURCES` に登録されたキー名を指定。`credentials[OCR_LLM_TOKEN_KEY]` の値が `--env=OCR_LLM_TOKEN=...` に注入される。
 
@@ -207,6 +211,41 @@ OpenAIのキーを `pi-private` の `credentialKeys` に含めた上で、Profil
 
 `OPENAI_API_KEY` は macOS Keychainから同名のサービスとして取得する。Pi組み込みのOpenAIモデルカタログを利用するため、
 ai-env側で `models.json` を作成する必要はない。
+
+#### Z.AI Platform API(`zai-platform`)を使う場合
+
+`ZAI_PLATFORM_API_KEY` を `pi-private` の `credentialKeys` に含めた上で、ProfileまたはProjectへ次を指定する。
+デフォルト設定は変更されないため、必要な利用者だけが追加する。
+
+```json
+{
+  "provider": "zai-platform",
+  "model": "glm-5.3-flash",
+  "apiKeyEnv": "ZAI_PLATFORM_API_KEY"
+}
+```
+
+**前提条件(ホスト側の作業)**
+
+1. macOS Keychain にサービス名 `ZAI_PLATFORM_API_KEY` で登録済みであること(ai-env が同名で取得する)。
+2. `~/.pi/agent/models.json` に `zai-platform` の provider 宣言があること。`zai-platform` は pi 組み込みではなく
+   **Provider Catalog(pi が所有する `~/.pi/agent/models.json`)側のカスタム provider** であり、`~/.pi` のマウント経由で
+   サンドボックスへ伝播する。ai-env はこのファイルの生成・更新・存在検証を行わない(ADR 0006 / ADR 0011)。
+
+**うまくいかないときの切り分け**
+
+コンテナ内で `/model` を開いて `zai-platform / glm-5.3-flash` が**一覧に出るか**を見る。
+
+| 症状 | 原因 |
+| --- | --- |
+| 一覧に出るが選べない / unavailable | 鍵が届いていない。Keychain 登録と Profile の `credentialKeys` を確認する |
+| 一覧に出ない | Provider Catalog に宣言がない(`models.json` 側)。ai-env は検出せず pi 側のエラーになる |
+| 起動時に `選択されたクレデンシャル ... が取得できません` | `apiKeyEnv` に選んだ鍵が未取得。このキーは警告で継続せず起動中止する(仕様) |
+
+**既知の挙動**: `apiKeyEnv` は Project case と CLI 経由でのみ `--api-key` に展開される。`--bash`・`pi-resume`・
+未マッチプロジェクトでは `apiKeyEnv` を渡さないため、pi 側の環境変数解決(`models.json` の `"apiKey": "$ZAI_PLATFORM_API_KEY"`)
+で鍵を取得する。どちらの経路でも届くよう `--env=ZAI_PLATFORM_API_KEY` を注入しており、`ZAI_API_KEY`(Coding Plan)は
+サンドボックスに渡さない。
 
 ### プロファイルの自動判別
 

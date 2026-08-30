@@ -4,7 +4,9 @@
   "profiles": {
     "pi-private": {
       // このProfileでKeychainから取得し、コンテナへ渡してよいクレデンシャル。
-      // OPENAI_API_KEYを追加済み。ZAI_API_KEYは対象外。
+      // OPENAI_API_KEY と ZAI_PLATFORM_API_KEY(Z.AI Platform API)を追加済み。
+      // pi 組み込み provider zai が使う ZAI_API_KEY(Z.AI Coding Plan)は対象外
+      // (課金経路が違うため混線させない)。
       "credentialKeys": [
         "BRAVE_SEARCH_API_KEY",
         "DEEPSEEK_API_KEY",
@@ -15,7 +17,8 @@
         "OPENCODE_API_KEY",
         "OPENROUTER_API_KEY",
         "QWEN_TOKEN_PLAN_API_KEY",
-        "XIAOMI_TOKEN_PLAN_SGP_API_KEY"
+        "XIAOMI_TOKEN_PLAN_SGP_API_KEY",
+        "ZAI_PLATFORM_API_KEY"
       ],
       "OCR_USE_ANTHROPIC": "false",
       // OpenCode のエンドポイント
@@ -26,6 +29,13 @@
       // "provider": "openai",
       // "model": "gpt-5.6-luna",
       // "apiKeyEnv": "OPENAI_API_KEY"
+      //
+      // Z.AI Platform API をProfileのデフォルトにする場合は次を追加する。
+      // zai-platform は Pi の Provider Catalog(~/.pi/agent/models.json)が宣言する
+      // カスタム provider で、ai-env はその生成も存在検証も行わない。
+      // "provider": "zai-platform",
+      // "model": "glm-5.3-flash",
+      // "apiKeyEnv": "ZAI_PLATFORM_API_KEY"
     }
     // 仕事用Profileの例（非アクティブ）。
     // WORK_API_KEYは現在のCREDENTIAL_SOURCESに登録されていないため、

@@ -27,6 +27,7 @@ export const CREDENTIAL_NAMES = [
   "OPENROUTER_API_KEY",
   "QWEN_TOKEN_PLAN_API_KEY",
   "XIAOMI_TOKEN_PLAN_SGP_API_KEY",
+  "ZAI_PLATFORM_API_KEY",
 ] as const;
 
 export type CredentialName = (typeof CREDENTIAL_NAMES)[number];
