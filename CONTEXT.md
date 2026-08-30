@@ -74,6 +74,14 @@ _Avoid_: セッション移行, コピー
 サンドボックス内で Index Data を読み取り、履歴を検索・表示する Ctx CLI の役割。Index Data の更新や Pi History Source の取り込みは担当しない。
 _Avoid_: インデクサー, 履歴管理者
 
+**Sandbox Search Client**:
+Search Client のうちサンドボックス内で動作する形態。Daemon Attempt を抑制し、ホスト側の Ctx CLI が更新した Index Data を virtiofs 経由で読み取る。検索に先立つデーモンの起動・復旧は担わない。
+_Avoid_: デーモン起動（サンドボックスで行うべきでない操作）, stale lock 対応（表示は誤判定であり対処対象ではない）
+
+**Daemon Attempt**:
+Ctx CLI が Index Data 更新のためにデーモンの起動・復旧を試みる動作。Sandbox Search Client ではコンテナの制約で失敗するため抑制の対象となる。Index Data の更新主体はホスト側のデーモンであり、サンドボックスから見た stale lock 表示は PID 確認ができないことによる誤判定。
+_Avoid_: デーモン再起動（ホスト側デーモンの復旧と混同する）
+
 **Resume**:
 既存セッションに接続して pi を起動・切り替える操作。経路は `pi -c`（最新セッションの続行）、`/resume`（プロジェクト内ピッカー）、`--session`（明示セッション）。
 _Avoid_: 引き継ぐ（README の旧表現）, 継続

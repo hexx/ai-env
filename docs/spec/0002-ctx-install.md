@@ -87,6 +87,7 @@ config.toml の `[upgrade] auto = "apply"` により 0.25.0 → 1.0.2 へ自動�
 - `/home/pi/.ctx` はホストの `~/.ctx` と同一実体を参照するが、サンドボックス側では読み取り専用とする
   （実装要求は `docs/spec/0005-ctx-pi-history-import.md` を参照）
 - サンドボックス内の検索は `--refresh off` を指定し、Index Data の更新を起こさない
+  （Daemon Attempt の抑制と検索の標準動作の詳細は [0008-ctx-sandbox-search.md](./0008-ctx-sandbox-search.md) を参照）
 - Pi 履歴の `setup` / `import` / `index mode` はホスト側でのみ実行する
 - 索引の初期化・再構築は Docker イメージのビルド時にも、サンドボックス起動時にも行わない
 
