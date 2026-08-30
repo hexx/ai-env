@@ -169,6 +169,15 @@ RUN curl -fsSL -o /tmp/install-ctx.sh https://ctx.rs/install \
     && sh /tmp/install-ctx.sh --no-setup --no-skill --no-pro-trial \
     && rm /tmp/install-ctx.sh
 
+# サンドボックス内の Ctx CLI は Sandbox Search Client として動作させる
+# （docs/spec/0008-ctx-sandbox-search.md、docs/adr/0009-ctx-index-data-host-ownership.md）。
+# Index Data の更新主体はホスト側のデーモンであり、サンドボックスからデーモンを
+# 起動・復旧する（Daemon Attempt）必要はない。抑制しない場合、既定の ctx search が
+# 検索前に Daemon Attempt を行い、コンテナ制約で Operation not permitted (os error 1)
+# となって「履歴検索が利用不可」との誤判断を生む。CTX_DAEMON_ENABLED=0 は Daemon
+# Attempt の抑制のみを目的とし、検索は引き続き --refresh off を標準とする。
+ENV CTX_DAEMON_ENABLED=0
+
 # =========================================================
 # 5. ユーザー固有の設定とエントリーポイント
 # =========================================================
