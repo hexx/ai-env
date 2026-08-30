@@ -88,6 +88,20 @@ _Avoid_: APIキー（値と名前を混同する場合）, シークレット
 Profile が利用を許可する Credential Key の集合。許可されていないキーは、その Profile の利用対象にならない。
 _Avoid_: ホワイトリスト, `credentialKeys`（設定フィールド名だけを指す場合）
 
+## Provider Access
+
+**Provider Catalog**:
+pi がモデルの選択肢として読む一覧の正本（pi 組み込みカタログと `~/.pi/agent/models.json` のカスタム provider 宣言）。所有者は pi 側で、ai-env は生成・更新・存在検証を担当しない。
+_Avoid_: モデル一覧（ai-env が生成するものと誤解される）, models.json（ファイル名では所有境界が読めない）
+
+**Z.AI Platform API**:
+Z.AI の従量課金エンドポイントを指す pi 上のカスタム provider（`zai-platform`）。ai-env での Credential Key は `ZAI_PLATFORM_API_KEY`。
+_Avoid_: Z.AI（どちらの課金経路か不明）, zai（pi 組み込みの Coding Plan provider との混同）
+
+**Z.AI Coding Plan**:
+Z.AI の定額購読向けの経路で、pi 組み込みの provider `zai` / `zai-coding-cn`（`ZAI_API_KEY` / `ZAI_CODING_CN_API_KEY`）が対応する。ai-env の Credential Allowlist では対象外とし、Platform API とはキーも課金経路も分離する。
+_Avoid_: Z.AI, zai-platform（Platform API 側を指す）
+
 ## Tool Ownership
 
 **User-Owned Tool（ユーザー領域ツール）**:

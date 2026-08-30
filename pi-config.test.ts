@@ -151,6 +151,30 @@ describe("ProfileConfig.credentialKeys", () => {
     );
   });
 
+  it("ZAI_PLATFORM_API_KEY と zai-platform プロバイダ設定を読み込める", async () => {
+    // zai-platform は Pi の Provider Catalog(models.json)側で宣言するカスタム provider。
+    // ai-env は名前を検証せず、パス表現だけ通す(SAFE_SHELL_PATTERN / SAFE_MODEL_PATTERN)。
+    await withTempConfig(
+      {
+        profiles: {
+          "pi-private": baseProfile({
+            credentialKeys: ["OPENCODE_API_KEY", "ZAI_PLATFORM_API_KEY"],
+            provider: "zai-platform",
+            model: "glm-5.3-flash",
+            apiKeyEnv: "ZAI_PLATFORM_API_KEY",
+          }),
+        },
+        projects: { "ai-env": {} },
+      },
+      () => {
+        const config = loadAiEnvConfig();
+        assert.equal(config.profiles["pi-private"]?.provider, "zai-platform");
+        assert.equal(config.profiles["pi-private"]?.model, "glm-5.3-flash");
+        assert.equal(config.profiles["pi-private"]?.apiKeyEnv, "ZAI_PLATFORM_API_KEY");
+      },
+    );
+  });
+
   it("credentialKeys がないProfileを拒否する", async () => {
     await withTempConfig(
       {
@@ -164,14 +188,17 @@ describe("ProfileConfig.credentialKeys", () => {
   });
 
   it("未登録のクレデンシャルをcredentialKeysへ指定すると拒否する", async () => {
+    // 例はあえて汎用的な未登録名を使う。ZAI_API_KEY(pi 組み込み zai = Z.AI Coding Plan)
+    // も未登録だが、将来の対応で registered になる可能性があり、
+    // 「未登録の例」としての fixture には据えない(docs/spec/0007)。
     await withTempConfig(
       {
         profiles: {
-          "pi-private": baseProfile({ credentialKeys: ["ZAI_API_KEY"] }),
+          "pi-private": baseProfile({ credentialKeys: ["NOT_A_CREDENTIAL_KEY"] }),
         },
         projects: { "ai-env": {} },
       },
-      () => assert.throws(() => loadAiEnvConfig(), /登録済みクレデンシャル|ZAI_API_KEY/),
+      () => assert.throws(() => loadAiEnvConfig(), /登録済みクレデンシャル|NOT_A_CREDENTIAL_KEY/),
     );
   });
 
@@ -260,6 +287,35 @@ describe("ProjectConfig - session 廃止", () => {
         assert.ok(!("session" in config.projects["ai-env"]!));
         // 空オブジェクトのプロジェクトも許容される
         assert.deepEqual(config.projects["task-manager"], {});
+      },
+    );
+  });
+
+  it("Project に zai-platform / glm-5.3-flash を指定できる", async () => {
+    await withTempConfig(
+      {
+        profiles: {
+          "pi-private": {
+            credentialKeys: ["OPENCODE_API_KEY", "ZAI_PLATFORM_API_KEY"],
+            OCR_USE_ANTHROPIC: "false",
+            OCR_LLM_URL: "https://opencode.ai/zen/go/v1",
+            OCR_LLM_TOKEN_KEY: "OPENCODE_API_KEY",
+            OCR_LLM_MODEL: "mimo-v2.5-pro",
+          },
+        },
+        projects: {
+          "glm-playground": {
+            provider: "zai-platform",
+            model: "glm-5.3-flash",
+            apiKeyEnv: "ZAI_PLATFORM_API_KEY",
+          },
+        },
+      },
+      () => {
+        const config = loadAiEnvConfig();
+        assert.equal(config.projects["glm-playground"]?.provider, "zai-platform");
+        assert.equal(config.projects["glm-playground"]?.model, "glm-5.3-flash");
+        assert.equal(config.projects["glm-playground"]?.apiKeyEnv, "ZAI_PLATFORM_API_KEY");
       },
     );
   });

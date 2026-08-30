@@ -16,6 +16,7 @@ ai-env の主要ユースケースを表現できないため。`profiles` の p
   settings.json。ai-env が `--provider` / `--model` を渡すため、プロジェクトの `.pi/settings.json` は
   上書きされる。プロジェクト固有の設定を `.pi/settings.json` で行いたい場合は、`profiles` / `projects`
   の provider / model を指定しない（未指定なら pi の設定が生きる）。
+- **Provider Catalog の所有は pi 側**: `~/.pi/agent/models.json` が宣言するカスタム provider（例: Z.AI Platform API の `zai-platform`）も pi の所有物であり、ai-env は生成も更新も存在検証もしない。`~/.pi` はそのままマウントされるので宣言は全サンドボックスへ伝播するが、**鍵は伝播しない**（ADR 0011）。
 - **セッション機能との対比**: セッション再開は pi 標準に寄せた（ADR 0005）が、provider / model は
   「プロファイル」という pi にない概念のため ai-env に残す。棚卸しの結果、セッション保存・再開まわり
   （ADR 0004 の `/save-session` 等）が pi 標準で代替可能な主な無駄であり、既に PR #124 で撤去済み。

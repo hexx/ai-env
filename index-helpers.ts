@@ -137,6 +137,14 @@ export const CREDENTIAL_SOURCES: CredentialSource[] = [
     file: "security",
     name: "XIAOMI_TOKEN_PLAN_SGP_API_KEY",
   },
+  // Z.AI Platform API(従量課金)。pi 組み込みの zai(Z.AI Coding Plan)が使う
+  // ZAI_API_KEY とはキーも課金経路も別物で、そちらはあえて登録しない
+  // (docs/spec/0007-zai-platform-credential-and-model.md、用語は CONTEXT.md)。
+  {
+    args: ["find-generic-password", "-s", "ZAI_PLATFORM_API_KEY", "-w"],
+    file: "security",
+    name: "ZAI_PLATFORM_API_KEY",
+  },
 ];
 
 // Credentials 型は CREDENTIAL_NAMES の登録一覧から導出する。
