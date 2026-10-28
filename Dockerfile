@@ -3,7 +3,7 @@
 # =========================================================
 # ベースイメージ: Node.js 24 LTS (Debian trixie-slim)
 # Node 24 は Active LTS (2026-06 時点)。メジャーバージョンを明示固定して再現性を確保。
-FROM node:24-trixie-slim
+FROM node:26-trixie-slim
 
 # Playwrightブラウザの共有インストールパスとデフォルトエディタの設定
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
