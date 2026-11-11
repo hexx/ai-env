@@ -162,7 +162,7 @@ Index Data の鮮度や Pi 履歴ソースの状態を確認する場合は、�
     "ai-env": {
       "provider": "opencode-go",
       "model": "minimax-m3",
-      "apiKeyEnv": "LLM_API_KEY"
+      "apiKeyEnv": "OPENCODE_API_KEY"
     },
     "mindmap": {}
   }
@@ -171,6 +171,7 @@ Index Data の鮮度や Pi 履歴ソースの状態を確認する場合は、�
 
 * `profiles`: 仕事用 / プライベート用など用途別のプロファイル。`credentialKeys` は必須で、このProfileへ取得・注入してよいクレデンシャル名を列挙する。`OCR_LLM_TOKEN_KEY` と `apiKeyEnv` は必ずこの一覧に含める。
 * `provider` / `model` / `apiKeyEnv`: Profileの任意のデフォルト値。プロジェクト側で未指定の場合に使われる。今回、OpenAI / GPT-5.6 Luna / Z.AI Platform API をデフォルトには設定していない。
+* `apiKeyEnv` は選んだ `provider` が受け付けるキーを指定する(`opencode-go` / `opencode` → `OPENCODE_API_KEY`、`openai` → `OPENAI_API_KEY`、`zai-platform` → `ZAI_PLATFORM_API_KEY`)。別用途のキー(例: `opencode-go` に `LLM_API_KEY`)を渡すと、pi は `--api-key` を環境変数より優先するため、正しいキーがコンテナ内の env にあっても `401: {"type":"authentication_error","message":"Invalid credential"}` で失敗する。
 * `projects`: プロジェクトごとの pi 起動設定。`provider` / `model` / `apiKeyEnv` を任意で指定し、未指定時はプロファイルのデフォルト値にフォールバックする。`apiKeyEnv` はコンテナ内の API キー用環境変数名で、Profileの `credentialKeys` に含まれていなければならない。旧形式の `session` フィールド(セッション ID)は廃止されたが、後方互換のため読み飛ばされる(セッション再開は `pi -c` が担う)。
 * `OCR_LLM_TOKEN_KEY`: `CREDENTIAL_SOURCES` に登録されたキー名を指定。`credentials[OCR_LLM_TOKEN_KEY]` の値が `--env=OCR_LLM_TOKEN=...` に注入される。
 
