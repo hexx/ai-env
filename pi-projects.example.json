@@ -65,7 +65,11 @@
     "ai-env": {
       "provider": "opencode-go",
       "model": "minimax-m3",
-      "apiKeyEnv": "LLM_API_KEY"
+      // apiKeyEnv は provider が受け付けるキーを指定する。
+      // opencode-go / opencode は OPENCODE_API_KEY、openai は OPENAI_API_KEY。
+      // 別用途のキー(LLM_API_KEY 等)を渡すと pi は --api-key を環境変数より
+      // 優先するため、正しいキーが env にあっても 401 Invalid credential になる。
+      "apiKeyEnv": "OPENCODE_API_KEY"
     },
     "mindmap": {
       "model": "deepseek-v4-flash:high"
