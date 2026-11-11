@@ -28,5 +28,8 @@ jobs:
       - name: Lint
         run: npx oxlint
 
+      - name: Typecheck
+        run: npm run typecheck
+
       - name: Run tests
         run: npm test

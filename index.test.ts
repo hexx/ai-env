@@ -41,6 +41,7 @@ import {
   resolveRequiredApiKeyEnv,
   validateFlagCombination,
   type Credentials,
+  type PartialCredentials,
 } from "./index-helpers";
 import { CREDENTIAL_NAMES, type ProfileConfig } from "./pi-types";
 
@@ -259,7 +260,6 @@ describe("buildEnvArgs", () => {
           credentials: sampleCredentials(),
           herdrPaneId: "pane-1",
           hostIp: "192.168.1.10",
-          hostProjectName: "my-project",
           profileName: "pi-work",
           profile: sampleProfile({ OCR_LLM_TOKEN_KEY: "NON_EXISTENT_KEY" }),
         }),
@@ -276,7 +276,6 @@ describe("buildEnvArgs", () => {
           credentials: creds,
           herdrPaneId: "pane-1",
           hostIp: "192.168.1.10",
-          hostProjectName: "my-project",
           profileName: "pi-work",
           profile: sampleProfile({ OCR_LLM_TOKEN_KEY: "OPENCODE_API_KEY" }),
         }),
@@ -299,7 +298,7 @@ describe("buildEnvArgs", () => {
   it("PartialCredentials(一部欠落)でもエラーなく組み立て、欠落した値の env は省略する", () => {
     const creds = sampleCredentials();
     // XIAOMI と OPENROUTER を意図的に欠落させる
-    const partial: typeof creds = { ...creds };
+    const partial: PartialCredentials = { ...creds };
     delete partial.XIAOMI_TOKEN_PLAN_SGP_API_KEY;
     delete partial.OPENROUTER_API_KEY;
     const envArgs = buildEnvArgs({
@@ -329,7 +328,7 @@ describe("buildEnvArgs", () => {
   });
 
   it("選択中の apiKeyEnv が未取得ならエラーになる", () => {
-    const credentials = sampleCredentials();
+    const credentials: PartialCredentials = sampleCredentials();
     delete credentials.OPENAI_API_KEY;
     assert.throws(
       () =>
@@ -371,7 +370,7 @@ describe("buildEnvArgs", () => {
   });
 
   it("選択中の apiKeyEnv が ZAI_PLATFORM_API_KEY で未取得なら起動を中止する", () => {
-    const credentials = sampleCredentials();
+    const credentials: PartialCredentials = sampleCredentials();
     delete credentials.ZAI_PLATFORM_API_KEY;
     assert.throws(
       () =>
@@ -1034,7 +1033,7 @@ describe("buildContainerProcessEnv", () => {
   });
 
   it("秘密値はbase環境を変更せず子プロセス環境へ追加する", () => {
-    const base = { PATH: "/bin" };
+    const base: NodeJS.ProcessEnv = { PATH: "/bin" };
     const env = buildContainerProcessEnv(true, base, {
       OPENAI_API_KEY: "secret",
     });
