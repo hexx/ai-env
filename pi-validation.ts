@@ -6,6 +6,7 @@ import {
   CREDENTIAL_NAMES,
   SAFE_ENV_NAME_PATTERN,
   SAFE_ENV_PATTERN,
+  SAFE_EXTRA_HEADERS_PATTERN,
   SAFE_MODEL_PATTERN,
   SAFE_SHELL_PATTERN,
   type CredentialName,
@@ -30,6 +31,7 @@ const PATTERN_DESCRIPTIONS = new Map<RegExp, string>([
   [SAFE_SHELL_PATTERN, "英数字・ハイフン・アンダースコア・ピリオド"],
   [SAFE_MODEL_PATTERN, "英数字・ハイフン・アンダースコア・ピリオド・コロン"],
   [SAFE_ENV_PATTERN, "英数字・ハイフン・アンダースコア・ピリオド・コロン・スラッシュ等(URL 用)"],
+  [SAFE_EXTRA_HEADERS_PATTERN, "英数字・ハイフン・アンダースコア・ピリオド・コロン・スラッシュ等 + カンマ(ヘッダー用)"],
   [SAFE_ENV_NAME_PATTERN, "英字またはアンダースコア始まり + 英数字とアンダースコア(POSIX 環境変数名)"],
 ]);
 

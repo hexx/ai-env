@@ -311,6 +311,11 @@ export const buildEnvArgs = (params: {
     "--env=OCR_LLM_TOKEN",
     `--env=OCR_LLM_MODEL=${params.profile.OCR_LLM_MODEL}`,
   ];
+  // OpenCode zen/go など、ocr 側で追加ヘッダーが必要なエンドポイント向け。
+  // 未指定なら従来どおり何も渡さない。
+  if (params.profile.OCR_LLM_EXTRA_HEADERS !== undefined) {
+    envArgs.push(`--env=OCR_LLM_EXTRA_HEADERS=${params.profile.OCR_LLM_EXTRA_HEADERS}`);
+  }
 
   // 許可されたクレデンシャルだけをコンテナへ注入する。
   // 未取得の任意キーは空の環境変数を作らず、警告は loadCredentials 側に任せる。

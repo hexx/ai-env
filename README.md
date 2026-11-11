@@ -155,7 +155,8 @@ Index Data の鮮度や Pi 履歴ソースの状態を確認する場合は、�
       "OCR_USE_ANTHROPIC": "false",
       "OCR_LLM_URL": "https://opencode.ai/zen/go/v1",
       "OCR_LLM_TOKEN_KEY": "OPENCODE_API_KEY",
-      "OCR_LLM_MODEL": "mimo-v2.5-pro"
+      "OCR_LLM_MODEL": "mimo-v2.6-pro",
+      "OCR_LLM_EXTRA_HEADERS": "x-opencode-session=ai-env-ocr"
     }
   },
   "projects": {
@@ -174,6 +175,8 @@ Index Data の鮮度や Pi 履歴ソースの状態を確認する場合は、�
 * `apiKeyEnv` は選んだ `provider` が受け付けるキーを指定する(`opencode-go` / `opencode` → `OPENCODE_API_KEY`、`openai` → `OPENAI_API_KEY`、`zai-platform` → `ZAI_PLATFORM_API_KEY`)。別用途のキー(例: `opencode-go` に `LLM_API_KEY`)を渡すと、pi は `--api-key` を環境変数より優先するため、正しいキーがコンテナ内の env にあっても `401: {"type":"authentication_error","message":"Invalid credential"}` で失敗する。
 * `projects`: プロジェクトごとの pi 起動設定。`provider` / `model` / `apiKeyEnv` を任意で指定し、未指定時はプロファイルのデフォルト値にフォールバックする。`apiKeyEnv` はコンテナ内の API キー用環境変数名で、Profileの `credentialKeys` に含まれていなければならない。旧形式の `session` フィールド(セッション ID)は廃止されたが、後方互換のため読み飛ばされる(セッション再開は `pi -c` が担う)。
 * `OCR_LLM_TOKEN_KEY`: `CREDENTIAL_SOURCES` に登録されたキー名を指定。`credentials[OCR_LLM_TOKEN_KEY]` の値が `--env=OCR_LLM_TOKEN=...` に注入される。
+* `OCR_LLM_MODEL`: 選んだエンドポイントのモデル一覧に存在する ID を指定する。OpenCode zen/go の既定は `mimo-v2.6-pro`。
+* `OCR_LLM_EXTRA_HEADERS`: 任意。ocr が LLM へ送る追加ヘッダーを `name=value` のカンマ区切りで指定し、`--env=OCR_LLM_EXTRA_HEADERS=...` として注入される。OpenCode zen/go は `x-opencode-session` がないと `400 MissingSessionID` で拒否するため、`x-opencode-session=<任意の識別子>` を設定する。
 
 ### CLI オプション
 

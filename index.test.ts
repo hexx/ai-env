@@ -225,6 +225,33 @@ describe("buildEnvArgs", () => {
     assert.equal(ocrTokenArg, "--env=OCR_LLM_TOKEN");
   });
 
+  it("OCR_LLM_EXTRA_HEADERS を --env 引数として注入する", () => {
+    const envArgs = buildEnvArgs({
+      credentials: sampleCredentials(),
+      herdrPaneId: "pane-1",
+      hostIp: "192.168.1.10",
+      profileName: "pi-work",
+      profile: sampleProfile({ OCR_LLM_EXTRA_HEADERS: "x-opencode-session=ai-env-ocr" }),
+    });
+    assert.ok(
+      envArgs.includes("--env=OCR_LLM_EXTRA_HEADERS=x-opencode-session=ai-env-ocr"),
+    );
+  });
+
+  it("OCR_LLM_EXTRA_HEADERS 未指定なら --env 引数を追加しない", () => {
+    const envArgs = buildEnvArgs({
+      credentials: sampleCredentials(),
+      herdrPaneId: "pane-1",
+      hostIp: "192.168.1.10",
+      profileName: "pi-work",
+      profile: sampleProfile(),
+    });
+    assert.equal(
+      envArgs.find((a) => a.startsWith("--env=OCR_LLM_EXTRA_HEADERS=")),
+      undefined,
+    );
+  });
+
   it("OCR_LLM_TOKEN_KEY が CREDENTIAL_SOURCES に存在しないクレデンシャルを参照するとエラー", () => {
     assert.throws(
       () =>
