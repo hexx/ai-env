@@ -1,8 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "commonjs",
-    "moduleResolution": "node",
+    // 実行時のビルドは esbuild(--bundle --format=cjs) のため、TS 7 では
+    // bundler 解決を使う(moduleResolution=node10 は TS 7 で削除された)。
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "types": ["node"],
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
