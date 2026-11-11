@@ -24,7 +24,11 @@
       // OpenCode のエンドポイント
       "OCR_LLM_URL": "https://opencode.ai/zen/go/v1",
       "OCR_LLM_TOKEN_KEY": "OPENCODE_API_KEY",
-      "OCR_LLM_MODEL": "mimo-v2.5-pro"
+      // エンドポイントのモデル一覧に存在する ID を指定する。
+      "OCR_LLM_MODEL": "mimo-v2.6-pro",
+      // OpenCode zen/go は x-opencode-session がないと 400 MissingSessionID になる。
+      // ocr には `name=value` のカンマ区切りで追加ヘッダーを渡す。
+      "OCR_LLM_EXTRA_HEADERS": "x-opencode-session=ai-env-ocr"
       // GPT-5.6 LunaをProfileのデフォルトにする場合は、上記Profileへ次を追加する。
       // "provider": "openai",
       // "model": "gpt-5.6-luna",

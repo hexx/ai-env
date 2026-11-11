@@ -370,3 +370,77 @@ describe("ProjectConfig - session 廃止", () => {
     );
   });
 });
+
+// ===== OCR_LLM_EXTRA_HEADERS =====
+
+describe("ProfileConfig.OCR_LLM_EXTRA_HEADERS", () => {
+  const profileWith = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
+    credentialKeys: ["OPENCODE_API_KEY"],
+    OCR_USE_ANTHROPIC: "false",
+    OCR_LLM_URL: "https://opencode.ai/zen/go/v1",
+    OCR_LLM_TOKEN_KEY: "OPENCODE_API_KEY",
+    OCR_LLM_MODEL: "mimo-v2.6-pro",
+    ...overrides,
+  });
+
+  it("name=value のカンマ区切りを読み込める", async () => {
+    await withTempConfig(
+      {
+        profiles: {
+          "pi-private": profileWith({
+            OCR_LLM_EXTRA_HEADERS: "x-opencode-session=ai-env-ocr,x-trace=1",
+          }),
+        },
+        projects: { "ai-env": {} },
+      },
+      () => {
+        const config = loadAiEnvConfig();
+        assert.equal(
+          config.profiles["pi-private"]?.OCR_LLM_EXTRA_HEADERS,
+          "x-opencode-session=ai-env-ocr,x-trace=1",
+        );
+      },
+    );
+  });
+
+  it("未指定ならプロパティを持たない(後方互換)", async () => {
+    await withTempConfig(
+      {
+        profiles: { "pi-private": profileWith() },
+        projects: { "ai-env": {} },
+      },
+      () => {
+        const profile = loadAiEnvConfig().profiles["pi-private"]!;
+        assert.ok(!("OCR_LLM_EXTRA_HEADERS" in profile));
+      },
+    );
+  });
+
+  it("name=value 形式でない値を拒否する", async () => {
+    for (const value of ["x-opencode-session", "=value", "name=", "a=1,,b=2"]) {
+      await withTempConfig(
+        {
+          profiles: { "pi-private": profileWith({ OCR_LLM_EXTRA_HEADERS: value }) },
+          projects: { "ai-env": {} },
+        },
+        () => {
+          assert.throws(() => loadAiEnvConfig(), /OCR_LLM_EXTRA_HEADERS/);
+        },
+      );
+    }
+  });
+
+  it("空白を含む値を拒否する", async () => {
+    await withTempConfig(
+      {
+        profiles: {
+          "pi-private": profileWith({ OCR_LLM_EXTRA_HEADERS: "x-opencode-session=a b" }),
+        },
+        projects: { "ai-env": {} },
+      },
+      () => {
+        assert.throws(() => loadAiEnvConfig(), /OCR_LLM_EXTRA_HEADERS/);
+      },
+    );
+  });
+});

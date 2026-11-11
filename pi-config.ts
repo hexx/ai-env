@@ -15,6 +15,7 @@ import {
   MIN_PROJECTS,
   SAFE_ENV_PATTERN,
   SAFE_ENV_NAME_PATTERN,
+  SAFE_EXTRA_HEADERS_PATTERN,
   SAFE_MODEL_PATTERN,
   SAFE_SHELL_PATTERN,
 } from "./pi-types";
@@ -82,8 +83,35 @@ export const toAiEnvConfigObject = (
 
 // ===== プロファイルパース =====
 
-// プロファイルの必須 OCR フィールド 4 つを検証。
+// OCR_LLM_EXTRA_HEADERS の値を検証する。
+// SAFE_EXTRA_HEADERS_PATTERN で文字種を絞った上で、各要素が `name=value` に
+// なっていることを確認する(空のヘッダー名・値を ocr に渡さない)。
+const parseExtraHeaders = (
+  configPath: string,
+  key: string,
+  rawValue: unknown,
+): string => {
+  const value = requireSafeId({
+    configPath,
+    fieldName: "OCR_LLM_EXTRA_HEADERS",
+    key,
+    pattern: SAFE_EXTRA_HEADERS_PATTERN,
+    rawValue,
+  });
+  for (const header of value.split(",")) {
+    const separator = header.indexOf("=");
+    if (separator <= 0 || separator === header.length - 1) {
+      throw new Error(
+        `設定ファイル ${configPath} の値が無効です: ${key}.OCR_LLM_EXTRA_HEADERS = ${JSON.stringify(value)} (name=value をカンマ区切りで指定してください)`,
+      );
+    }
+  }
+  return value;
+};
+
+// プロファイルの必須 OCR フィールド 4 つと任意の追加ヘッダーを検証。
 // OCR_LLM_TOKEN_KEY は登録済みクレデンシャル名に限定する。
+// OCR_LLM_EXTRA_HEADERS は ocr の `name=value` (カンマ区切り) 形式だけを許容する。
 export const parseProfileOcrFields = (
   configPath: string,
   name: string,
@@ -95,7 +123,11 @@ export const parseProfileOcrFields = (
   const OCR_LLM_TOKEN_KEY = requireCredentialName({ configPath, fieldName: "OCR_LLM_TOKEN_KEY", key, rawValue: profileObj.OCR_LLM_TOKEN_KEY });
   const OCR_LLM_URL = requireSafeId({ configPath, fieldName: "OCR_LLM_URL", key, pattern: SAFE_ENV_PATTERN, rawValue: profileObj.OCR_LLM_URL });
   const OCR_USE_ANTHROPIC = requireSafeId({ configPath, fieldName: "OCR_USE_ANTHROPIC", key, pattern: SAFE_ENV_PATTERN, rawValue: profileObj.OCR_USE_ANTHROPIC });
-  return { credentialKeys, OCR_LLM_MODEL, OCR_LLM_TOKEN_KEY, OCR_LLM_URL, OCR_USE_ANTHROPIC };
+  const result: ProfileConfig = { credentialKeys, OCR_LLM_MODEL, OCR_LLM_TOKEN_KEY, OCR_LLM_URL, OCR_USE_ANTHROPIC };
+  if ("OCR_LLM_EXTRA_HEADERS" in profileObj) {
+    result.OCR_LLM_EXTRA_HEADERS = parseExtraHeaders(configPath, key, profileObj.OCR_LLM_EXTRA_HEADERS);
+  }
+  return result;
 };
 
 // プロファイルのオプション(provider/model/apiKeyEnv)をそれぞれ適切な pattern で検証。
@@ -123,6 +155,7 @@ const parseProfileOptionalFields = (params: {
 };
 
 // 単一プロファイルをパース・検証。必須 4 フィールド(OCR_*)は SAFE_ENV_PATTERN、
+// 任意の OCR_LLM_EXTRA_HEADERS は SAFE_EXTRA_HEADERS_PATTERN、
 // オプションの provider は SAFE_SHELL_PATTERN、model は SAFE_MODEL_PATTERN でバリデーション。
 export const parseProfileEntry = (
   configPath: string,
@@ -239,10 +272,12 @@ export const getDefaultConfig = (): AiEnvConfig => {
     profiles: {
       "pi-private": {
         credentialKeys: [...CREDENTIAL_NAMES],
-        OCR_LLM_MODEL: "mimo-v2.5-pro",
+        OCR_LLM_MODEL: "mimo-v2.6-pro",
         OCR_LLM_TOKEN_KEY: "OPENCODE_API_KEY",
         OCR_LLM_URL: "https://opencode.ai/zen/go/v1",
         OCR_USE_ANTHROPIC: "false",
+        // zen/go は x-opencode-session ヘッダーがないと 400 MissingSessionID になる。
+        OCR_LLM_EXTRA_HEADERS: "x-opencode-session=ai-env-ocr",
       },
     },
     projects: {

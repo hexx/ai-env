@@ -36,6 +36,8 @@ export type CredentialName = (typeof CREDENTIAL_NAMES)[number];
 // OCR_LLM_TOKEN_KEY には CREDENTIAL_NAMES のキー名(例: "OPENCODE_API_KEY")を
 // 指定し、credentials[OCR_LLM_TOKEN_KEY] を --env=OCR_LLM_TOKEN= に注入する。
 // credentialKeys は、この Profile のサンドボックスへ取得・注入してよいキーの一覧。
+// OCR_LLM_EXTRA_HEADERS は ocr が LLM へ送る追加ヘッダー(name=value のカンマ区切り)。
+// OpenCode の zen/go は x-opencode-session を要求するため、その指定に使う。
 // provider / model / apiKeyEnv はプロジェクト側の未指定時のフォールバック値として
 // 利用される(ProjectConfig の同名フィールドが優先される)。
 export interface ProfileConfig {
@@ -44,6 +46,7 @@ export interface ProfileConfig {
   OCR_LLM_URL: string;
   OCR_LLM_TOKEN_KEY: string;
   OCR_LLM_MODEL: string;
+  OCR_LLM_EXTRA_HEADERS?: string;
   provider?: string;
   model?: string;
   apiKeyEnv?: string;
@@ -86,3 +89,9 @@ export const SAFE_ENV_NAME_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/u;
 // 通さず、VALUE 内のスペース以外で分割されることはない。URL で必要になる
 // ':' '/' '@' '?' '&' '=' '#' '%' '+' を含むことができる。
 export const SAFE_ENV_PATTERN = /^[a-zA-Z0-9._:/@?&=#%+-]+$/u;
+
+// OCR_LLM_EXTRA_HEADERS 用の許可文字パターン。
+// SAFE_ENV_PATTERN 相当の文字種をカンマ区切りで 1 個以上繰り返す形式。
+// `name=value,name2=value2` を許容し、空セグメント(前後・連続カンマ)は不可。
+export const SAFE_EXTRA_HEADERS_PATTERN =
+  /^[a-zA-Z0-9._:/@?&=#%+-]+(?:,[a-zA-Z0-9._:/@?&=#%+-]+)*$/u;
